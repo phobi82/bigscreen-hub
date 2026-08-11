@@ -1,0 +1,1710 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!--
+MIT License
+
+Copyright (c) 2026 Phobi82
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+<!doctype html>
+<html lang="en">
+	<head>
+		<link rel="icon" href="./assets/BigSTASI-Logo_small.png" type="image/png">
+	</head>
+	<body>
+		<script type="module">
+			import {createRoomConnection, selfId} from "./room.js";
+
+			const DEFAULT_ROOM_ID = "bigscreen";
+			const PAD_DEBOUNCE_MS = 300;
+			const CHAT_PROFILE_KEY = "chatProfile";
+			const COMMUNITY_ACCESS_KEY = "communityAccess";
+			const COMMUNITY_ACCESS_VERSION = 1;
+			const USER_RULES_KEY = "userRules";
+			const VDO_BASE_URL = "https://vdo.ninja/";
+			const CHAT_MESSAGE_MAX_LENGTH = 1000;
+			const CHAT_NAME_CHANGE_DELAY_MS = 48 * 60 * 60 * 1000;
+			const WEBSITE_PRESETS = [
+				["ChatGPT", "https://chatgpt.com/"],
+				['Perplexity', "https://www.perplexity.ai/"],
+				["AI Live Radio", "https://suno.com/live-radio"],
+				['MidjourneyTV', "https://www.midjourney.tv/"],
+				['Iskur\'s Guide to Electronic Musik', "https://music.ishkur.com/"],
+				["Google", "https://google.com/"],
+				["Equinox.space", "https://equinox.space/"],
+				["Paperclips", "https://www.decisionproblem.com/paperclips/index2.html"],
+				["Santas Workshop", "https://idle-js-games.github.io/santas-workshop/"],
+				["C64 Clicker", "http://c64clicker.com/"],
+				["A Road Trip", "https://tempo-l.ch/experiments/roadtrip/"],
+				["Plexus Shaders", "https://mgz.me/"],
+				["Project Sand", "https://www.projectsand.io/"],
+				["WebGL Fluid", "https://paveldogreat.github.io/WebGL-Fluid-Simulation/"],
+				["Windows 93", "https://www.windows93.net/"],
+				["SharePad.io", "https://sharepad.io/live/bigscreen"],
+				['Multiplayer Piano', "https://musiclab.chromeexperiments.com/Shared-Piano/#bigscreen"]
+			];
+			const URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
+			const TRAILING_PUNCTUATION = /[.,!?;:)}\]]+$/;
+			const STREAM_ID_PATTERN = /^[a-f0-9]{32}$/;
+			const USER_ID_PATTERN = /^[a-f0-9]{32}$/;
+			const params = new URLSearchParams(location.search);
+			const isReceiver = params.get("mode") === "view";
+			const colors = {
+				background: "#06121b",
+				backgroundSoft: "#071923",
+				panel: "#0c2231",
+				panelSoft: "#102b3d",
+				line: "#23475c",
+				text: "#edf8ff",
+				muted: "#94b1c2",
+				label: "#c5dce8",
+				accent: "#29b6f6",
+				accentStrong: "#58d0ff",
+				warning: "#f0c94a",
+				danger: "#ff6b72"
+			};
+
+			document.title = "Bigscreen Interactive Hub";
+			document.body.style.minWidth = "320px";
+			document.body.style.minHeight = "100vh";
+			document.body.style.margin = "0";
+			document.body.style.padding = ".75rem";
+			document.body.style.color = colors.text;
+			document.body.style.background = colors.background;
+			document.body.style.fontFamily = "system-ui,sans-serif";
+
+			const layoutStyles = document.createElement("style");
+			layoutStyles.textContent = `
+				button,
+				input,
+				textarea {
+					font: inherit;
+				}
+				button {
+					line-height: 1;
+				}
+				h2 {
+					font-size: 1.1rem;
+				}
+				.site-header { display: grid; grid-template-columns: minmax(7rem,1fr) auto minmax(7rem,1fr); align-items: center; gap: .75rem; }
+				.site-title { min-width: 0; text-align: center; white-space: nowrap; }
+				.presented-by { display: flex; align-items: center; justify-self: end; gap: .45rem; white-space: nowrap; }
+				.connection-bar { flex-wrap: nowrap; }
+				.room-workspace { display: grid !important; grid-template-columns: 11rem minmax(0,1fr); align-items: start; }
+				.room-workspace[hidden] { display: none !important; }
+				.room-workspace.solo { grid-template-columns: minmax(0,1fr); }
+				.room-main { display: grid; grid-template-columns: minmax(0,2fr) minmax(15rem,1fr); gap: .75rem; min-width: 0; }
+				.room-main > .full-width { grid-column: 1 / -1; }
+				.participant-row { display: grid; grid-template-columns: .5rem minmax(0,1fr); gap: .4rem; width: 100%; padding: .4rem .1rem; border: 0; border-bottom: 1px solid ${colors.line}; border-radius: 0; color: ${colors.text}; background: transparent; font-size: .9rem; text-align: left; cursor: pointer; }
+				.participant-row:hover, .participant-row:focus-visible { background: ${colors.panel}; }
+				.participant-dot { width: .45rem; height: .45rem; margin-top: .35rem; border-radius: 50%; background: #5cca8f; }
+				.participant-identity { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+				.participant-meta { display: flex; align-items: center; gap: .35rem; min-width: 0; margin-top: .1rem; overflow: hidden; color: ${colors.muted}; font-family: ui-monospace,monospace; font-size: .72rem; white-space: nowrap; }
+				.participant-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+				.mode-badge { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 1.1rem; padding: 0 .3rem; border: 1px solid; border-radius: 999px; font-family: system-ui,sans-serif; font-size: .65rem; font-weight: 700; line-height: 1; }
+				.mode-web { border-color: #327a59; color: #7ce6ae; background: #123b2c; }
+				.mode-vr { border-color: #6755a0; color: #d5c8ff; background: #302657; }
+				.user-context-menu[hidden] { display: none !important; }
+				.chat-message { display: grid; grid-template-columns: minmax(5.5rem,8rem) minmax(0,1fr); align-items: start; gap: .5rem; }
+				.chat-event { padding-left: 8.5rem; color: ${colors.muted}; font-size: .75rem; }
+				@media (max-width: 800px) {
+					.connection-bar { flex-wrap: wrap !important; }
+					.room-workspace { grid-template-columns: 1fr; }
+					.room-main { grid-template-columns: 1fr; }
+					.room-main > * { grid-column: 1; }
+					.chat-event { padding-left: 0; }
+				}
+				@media (max-width: 560px) {
+					.site-header { grid-template-columns: auto 1fr; gap: .4rem .75rem; }
+					.site-title { grid-column: 1 / -1; grid-row: 1; white-space: normal; }
+					.header-avatar { grid-column: 1; grid-row: 2; }
+					.presented-by { grid-column: 2; grid-row: 2; }
+				}
+			`;
+			document.head.appendChild(layoutStyles);
+
+			const app = document.createElement("main");
+			app.style.maxWidth = "1100px";
+			app.style.margin = "0 auto";
+			document.body.appendChild(app);
+
+			const header = document.createElement("header");
+			header.className = "site-header";
+			header.style.marginBottom = ".75rem";
+			app.appendChild(header);
+
+			const avatar = document.createElement("img");
+			avatar.className = "header-avatar";
+			avatar.src = "./assets/phobi-logo.png";
+			avatar.alt = "Phobi";
+			avatar.style.width = "2.25rem";
+			avatar.style.height = "2.25rem";
+			avatar.style.justifySelf = "start";
+			avatar.style.border = "2px solid " + colors.accent;
+			avatar.style.borderRadius = "50%";
+			avatar.style.background = colors.text;
+
+			const logo = document.createElement("img");
+			logo.src = "./assets/BigSTASI-Logo_small.png";
+			logo.alt = "BigSTASI";
+			logo.style.width = "5rem";
+			logo.style.borderRadius = ".5rem";
+
+			const presentation = document.createElement("span");
+			presentation.textContent = "presented by";
+			presentation.style.color = colors.muted;
+			presentation.style.fontSize = ".8rem";
+
+			const title = document.createElement("h1");
+			title.className = "site-title";
+			title.textContent = "Bigscreen Interactive Hub";
+			title.style.margin = "0";
+			title.style.color = colors.accent;
+			title.style.fontSize = "clamp(1.5rem, 4vw, 2.3rem)";
+
+			const presentedBy = document.createElement("div");
+			presentedBy.className = "presented-by";
+			presentedBy.append(presentation, logo);
+			header.append(avatar, title, presentedBy);
+
+			const connectionPanel = document.createElement("section");
+			connectionPanel.className = "connection-bar";
+			connectionPanel.style.display = "flex";
+			connectionPanel.style.flexWrap = "nowrap";
+			connectionPanel.style.alignItems = "center";
+			connectionPanel.style.gap = ".5rem";
+			connectionPanel.style.padding = ".4rem .65rem";
+			connectionPanel.style.border = "1px solid " + colors.line;
+			connectionPanel.style.borderRadius = ".8rem";
+			connectionPanel.style.background = colors.panel;
+			app.appendChild(connectionPanel);
+
+			const roomForm = document.createElement("form");
+			roomForm.style.display = "flex";
+			roomForm.style.alignItems = "center";
+			roomForm.style.gap = ".5rem";
+			roomForm.style.flex = "1 1 auto";
+			connectionPanel.appendChild(roomForm);
+
+			const roomLabel = document.createElement("label");
+			roomLabel.textContent = "Room ID";
+			roomLabel.style.color = colors.label;
+			roomLabel.style.whiteSpace = "nowrap";
+			roomForm.appendChild(roomLabel);
+
+			const roomInput = document.createElement("input");
+			roomInput.type = "text";
+			roomInput.value = params.get("room")?.trim() || DEFAULT_ROOM_ID;
+			roomInput.required = true;
+			roomInput.autocomplete = "off";
+			roomInput.spellcheck = false;
+			roomInput.style.minWidth = "0";
+			roomInput.style.height = "2rem";
+			roomInput.style.flex = "1";
+			roomInput.style.maxWidth = "16rem";
+			roomInput.style.padding = ".4rem .65rem";
+			roomInput.style.border = "1px solid " + colors.line;
+			roomInput.style.borderRadius = ".55rem";
+			roomInput.style.boxSizing = "border-box";
+			roomInput.style.color = colors.text;
+			roomInput.style.background = colors.backgroundSoft;
+			roomForm.appendChild(roomInput);
+
+			const joinButton = document.createElement("button");
+			joinButton.type = "submit";
+			joinButton.textContent = "Join";
+			joinButton.style.height = "2rem";
+			joinButton.style.padding = ".4rem .7rem";
+			joinButton.style.border = "0";
+			joinButton.style.borderRadius = ".55rem";
+			joinButton.style.boxSizing = "border-box";
+			joinButton.style.color = colors.background;
+			joinButton.style.background = colors.accent;
+			joinButton.style.fontWeight = "700";
+			joinButton.style.cursor = "pointer";
+			roomForm.appendChild(joinButton);
+
+			const leaveButton = document.createElement("button");
+			leaveButton.type = "button";
+			leaveButton.textContent = "Leave";
+			leaveButton.hidden = true;
+			leaveButton.style.height = "2rem";
+			leaveButton.style.padding = ".4rem .7rem";
+			leaveButton.style.border = "1px solid " + colors.danger;
+			leaveButton.style.borderRadius = ".55rem";
+			leaveButton.style.boxSizing = "border-box";
+			leaveButton.style.color = colors.background;
+			leaveButton.style.background = colors.danger;
+			leaveButton.style.fontWeight = "700";
+			leaveButton.style.cursor = "pointer";
+			roomForm.appendChild(leaveButton);
+
+			const connectionStatus = document.createElement("strong");
+			connectionStatus.textContent = "Disconnected";
+			connectionStatus.setAttribute("aria-live", "polite");
+			connectionPanel.appendChild(connectionStatus);
+
+			const participantCount = document.createElement("span");
+			participantCount.textContent = "0 users";
+			participantCount.style.color = colors.muted;
+			participantCount.hidden = true;
+			connectionPanel.appendChild(participantCount);
+
+			const controllerAccessPanel = document.createElement("section");
+			controllerAccessPanel.hidden = !isReceiver;
+			controllerAccessPanel.style.display = isReceiver ? "grid" : "none";
+			controllerAccessPanel.style.gap = ".45rem";
+			controllerAccessPanel.style.marginTop = "0";
+			controllerAccessPanel.style.padding = ".55rem";
+			controllerAccessPanel.style.border = "1px solid " + colors.accent;
+			controllerAccessPanel.style.borderRadius = ".8rem";
+			controllerAccessPanel.style.background = colors.panel;
+			app.appendChild(controllerAccessPanel);
+
+			const controllerAccessTitle = document.createElement("h2");
+			controllerAccessTitle.textContent = "Control from another device";
+			controllerAccessTitle.style.margin = "0";
+			controllerAccessPanel.appendChild(controllerAccessTitle);
+
+			const controllerAccessHint = document.createElement("p");
+			controllerAccessHint.textContent = "Open this address on a PC, phone, or tablet:";
+			controllerAccessHint.style.margin = "0";
+			controllerAccessHint.style.color = colors.label;
+			controllerAccessHint.style.fontSize = ".9rem";
+			controllerAccessPanel.appendChild(controllerAccessHint);
+
+			const controllerAccessUrl = document.createElement("output");
+			controllerAccessUrl.style.display = "block";
+			controllerAccessUrl.style.padding = ".55rem";
+			controllerAccessUrl.style.borderRadius = ".55rem";
+			controllerAccessUrl.style.color = colors.accentStrong;
+			controllerAccessUrl.style.background = colors.backgroundSoft;
+			controllerAccessUrl.style.fontFamily = "ui-monospace,monospace";
+			controllerAccessUrl.style.lineHeight = "1.5";
+			controllerAccessUrl.style.overflowWrap = "anywhere";
+			controllerAccessPanel.appendChild(controllerAccessUrl);
+
+			const controllerAccessRoom = document.createElement("strong");
+			controllerAccessPanel.appendChild(controllerAccessRoom);
+
+			const notice = document.createElement("small");
+			notice.style.flexBasis = "18rem";
+			notice.style.minWidth = "0";
+			notice.style.overflow = "hidden";
+			notice.style.whiteSpace = "nowrap";
+			notice.style.visibility = "hidden";
+			connectionPanel.appendChild(notice);
+
+			const content = document.createElement("div");
+			content.className = "room-workspace";
+			content.hidden = true;
+			content.style.display = "grid";
+			content.style.alignItems = "start";
+			content.style.gap = ".75rem";
+			content.style.marginTop = ".75rem";
+			app.appendChild(content);
+
+			const sharepadPanel = document.createElement("section");
+			sharepadPanel.style.minWidth = "min(100%,30rem)";
+			sharepadPanel.style.flex = "1 1 38rem";
+			sharepadPanel.style.padding = ".5rem";
+			sharepadPanel.style.border = "1px solid " + colors.line;
+			sharepadPanel.style.borderRadius = ".65rem";
+			sharepadPanel.style.boxSizing = "border-box";
+			sharepadPanel.style.background = colors.panel;
+			content.appendChild(sharepadPanel);
+
+			const sharepadTitle = document.createElement("h2");
+			sharepadTitle.textContent = "Sharepad";
+			sharepadTitle.style.margin = "0 0 .35rem";
+			sharepadPanel.appendChild(sharepadTitle);
+
+			const sharepad = document.createElement("textarea");
+			sharepad.rows = 4;
+			sharepad.placeholder = "Write shared notes and links here.";
+			sharepad.style.width = "100%";
+			sharepad.style.minHeight = "7rem";
+			sharepad.style.padding = ".45rem";
+			sharepad.style.border = "1px solid " + colors.line;
+			sharepad.style.borderRadius = ".55rem";
+			sharepad.style.boxSizing = "border-box";
+			sharepad.style.color = colors.text;
+			sharepad.style.background = colors.backgroundSoft;
+			sharepad.style.lineHeight = "1.5";
+			sharepad.style.resize = "vertical";
+			sharepadPanel.appendChild(sharepad);
+
+			const detectedLinks = document.createElement("ul");
+			detectedLinks.style.display = "grid";
+			detectedLinks.style.gap = ".4rem";
+			detectedLinks.style.margin = ".8rem 0 0";
+			detectedLinks.style.padding = "0";
+			detectedLinks.style.listStyle = "none";
+			sharepadPanel.appendChild(detectedLinks);
+
+			const streamPanel = document.createElement("section");
+			streamPanel.hidden = true;
+			streamPanel.style.minWidth = "min(100%,30rem)";
+			streamPanel.style.flex = "1 1 38rem";
+			streamPanel.style.padding = ".55rem";
+			streamPanel.style.border = "1px solid " + colors.line;
+			streamPanel.style.borderRadius = ".65rem";
+			streamPanel.style.boxSizing = "border-box";
+			streamPanel.style.background = colors.panel;
+			streamPanel.style.order = isReceiver ? "-1" : "0";
+			content.appendChild(streamPanel);
+
+			const streamLink = document.createElement("a");
+			streamLink.textContent = "Open stream directly";
+			streamLink.target = "_blank";
+			streamLink.rel = "noopener noreferrer";
+			streamLink.style.display = "inline-block";
+			streamLink.style.marginBottom = ".5rem";
+			streamLink.style.color = colors.accentStrong;
+			streamPanel.appendChild(streamLink);
+
+			const streamFrame = document.createElement("iframe");
+			streamFrame.title = "VDO.Ninja live stream";
+			streamFrame.allow = "autoplay; fullscreen; picture-in-picture";
+			streamFrame.style.width = "100%";
+			streamFrame.style.height = "min(68vh,46rem)";
+			streamFrame.style.border = "0";
+			streamFrame.style.background = "#000";
+			streamPanel.appendChild(streamFrame);
+
+			const navigationPanel = document.createElement("section");
+			navigationPanel.style.display = "grid";
+			navigationPanel.style.gap = ".75rem";
+			navigationPanel.style.flex = "1 1 30rem";
+
+			const addressForm = document.createElement("form");
+			addressForm.style.display = "grid";
+			addressForm.style.gap = ".5rem";
+			addressForm.style.padding = ".6rem";
+			addressForm.style.border = "1px solid " + colors.line;
+			addressForm.style.borderRadius = ".65rem";
+			addressForm.style.background = colors.panel;
+			navigationPanel.appendChild(addressForm);
+
+			const addressLabel = document.createElement("label");
+			addressLabel.textContent = isReceiver ? "Open a website" : "Send a website link";
+			addressLabel.style.color = colors.label;
+			addressLabel.style.fontSize = ".9rem";
+			addressForm.appendChild(addressLabel);
+
+			const addressRow = document.createElement("div");
+			addressRow.style.display = "flex";
+			addressRow.style.flexWrap = "wrap";
+			addressRow.style.alignItems = "center";
+			addressRow.style.gap = ".5rem";
+			addressForm.appendChild(addressRow);
+
+			const addressInput = document.createElement("input");
+			addressInput.type = "text";
+			addressInput.placeholder = "example.com";
+			addressInput.autocomplete = "off";
+			addressInput.spellcheck = false;
+			addressInput.style.minWidth = "12rem";
+			addressInput.style.flex = "1";
+			addressInput.style.height = "2rem";
+			addressInput.style.padding = ".4rem .65rem";
+			addressInput.style.border = "1px solid " + colors.line;
+			addressInput.style.borderRadius = ".55rem";
+			addressInput.style.boxSizing = "border-box";
+			addressInput.style.color = colors.text;
+			addressInput.style.background = colors.backgroundSoft;
+			addressRow.appendChild(addressInput);
+
+			const addressActions = document.createElement("div");
+			addressActions.style.display = "flex";
+			addressActions.style.flexWrap = "wrap";
+			addressActions.style.gap = ".5rem";
+			addressRow.appendChild(addressActions);
+
+			const openAddressButton = document.createElement("button");
+			openAddressButton.type = "button";
+			openAddressButton.textContent = isReceiver ? "Open" : "Send link";
+			openAddressButton.style.height = "2rem";
+			openAddressButton.style.padding = ".4rem .7rem";
+			openAddressButton.style.border = "0";
+			openAddressButton.style.borderRadius = ".55rem";
+			openAddressButton.style.color = colors.background;
+			openAddressButton.style.background = colors.accent;
+			openAddressButton.style.fontWeight = "700";
+			openAddressButton.style.cursor = "pointer";
+			addressActions.appendChild(openAddressButton);
+
+			const sendLinkToggle = document.createElement("label");
+			sendLinkToggle.hidden = !isReceiver;
+			sendLinkToggle.style.display = isReceiver ? "flex" : "none";
+			sendLinkToggle.style.alignItems = "center";
+			sendLinkToggle.style.gap = ".4rem";
+			sendLinkToggle.style.color = colors.label;
+			const sendLinkCheckbox = document.createElement("input");
+			sendLinkCheckbox.type = "checkbox";
+			sendLinkCheckbox.style.accentColor = colors.accent;
+			sendLinkToggle.append(sendLinkCheckbox, document.createTextNode("Also send link"));
+			addressActions.appendChild(sendLinkToggle);
+
+			const quickLinksTitle = document.createElement("h2");
+			quickLinksTitle.textContent = "Quick links";
+			quickLinksTitle.style.margin = "0";
+
+			const quickLinks = document.createElement("div");
+			quickLinks.style.display = isReceiver ? "flex" : "none";
+			quickLinks.style.flexWrap = "wrap";
+			quickLinks.style.gap = ".5rem";
+			for (const [label, url] of WEBSITE_PRESETS) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = label;
+				button.style.minHeight = "2rem";
+				button.style.padding = ".3rem .6rem";
+				button.style.border = "1px solid " + colors.line;
+				button.style.borderRadius = ".55rem";
+				button.style.color = colors.text;
+				button.style.background = colors.backgroundSoft;
+				button.style.cursor = "pointer";
+				button.addEventListener("click", () => {
+					openAndMaybeSendUrl(url, label);
+				});
+				quickLinks.appendChild(button);
+			}
+			quickLinksTitle.hidden = !isReceiver;
+			quickLinks.hidden = !isReceiver;
+			addressForm.append(quickLinksTitle, quickLinks);
+
+			const chatPanel = document.createElement("section");
+			chatPanel.style.display = "grid";
+			chatPanel.style.gap = ".4rem";
+			chatPanel.style.padding = ".5rem";
+			chatPanel.style.border = "1px solid " + colors.line;
+			chatPanel.style.borderRadius = ".65rem";
+			chatPanel.style.background = colors.panel;
+			navigationPanel.appendChild(chatPanel);
+
+			const chatTitle = document.createElement("h2");
+			chatTitle.textContent = "Room chat";
+			chatTitle.style.margin = "0";
+			chatPanel.appendChild(chatTitle);
+
+			const communityAccessPanel = document.createElement("section");
+			communityAccessPanel.style.display = "grid";
+			communityAccessPanel.style.gap = ".55rem";
+			communityAccessPanel.style.padding = ".75rem";
+			communityAccessPanel.style.border = "1px solid " + colors.accent;
+			communityAccessPanel.style.borderRadius = ".65rem";
+			communityAccessPanel.style.background = colors.panel;
+
+			const communityAccessTitle = document.createElement("h2");
+			communityAccessTitle.textContent = "Community access";
+			communityAccessTitle.style.margin = "0";
+			communityAccessPanel.appendChild(communityAccessTitle);
+
+			const communityAccessDisclaimer = document.createElement("p");
+			communityAccessDisclaimer.textContent = "This independent community page is not affiliated with or operated by the official Bigscreen operators.";
+			communityAccessDisclaimer.style.margin = "0";
+			communityAccessDisclaimer.style.color = colors.label;
+			communityAccessPanel.appendChild(communityAccessDisclaimer);
+
+			const communityRules = document.createElement("ul");
+			communityRules.style.margin = "0";
+			communityRules.style.paddingLeft = "1.25rem";
+			for (const rule of [
+				"Treat others respectfully; no harassment, hate speech, or threats.",
+				"Do not share illegal or harmful content.",
+				"Share only content and links you are permitted to share.",
+				"Respect other users' privacy and consent."
+			]) {
+				const item = document.createElement("li");
+				item.textContent = rule;
+				communityRules.appendChild(item);
+			}
+			communityAccessPanel.appendChild(communityRules);
+
+			const communityResponsibility = document.createElement("p");
+			communityResponsibility.textContent = "By accepting, you confirm that you are responsible for your own activity and will follow these basic rules.";
+			communityResponsibility.style.margin = "0";
+			communityResponsibility.style.color = colors.label;
+			communityAccessPanel.appendChild(communityResponsibility);
+
+			const communityAccessForm = document.createElement("form");
+			communityAccessForm.style.display = "flex";
+			communityAccessForm.style.flexWrap = "wrap";
+			communityAccessForm.style.alignItems = "center";
+			communityAccessForm.style.gap = ".5rem";
+			communityAccessPanel.appendChild(communityAccessForm);
+
+			const communityNicknameInput = document.createElement("input");
+			communityNicknameInput.type = "text";
+			communityNicknameInput.maxLength = 40;
+			communityNicknameInput.placeholder = "Nickname (optional)";
+			communityNicknameInput.autocomplete = "name";
+			communityNicknameInput.style.minWidth = "12rem";
+			communityNicknameInput.style.height = "2rem";
+			communityNicknameInput.style.flex = "1";
+			communityNicknameInput.style.padding = ".4rem .65rem";
+			communityNicknameInput.style.border = "1px solid " + colors.line;
+			communityNicknameInput.style.borderRadius = ".55rem";
+			communityNicknameInput.style.boxSizing = "border-box";
+			communityNicknameInput.style.color = colors.text;
+			communityNicknameInput.style.background = colors.backgroundSoft;
+			communityAccessForm.appendChild(communityNicknameInput);
+
+			const acceptCommunityAccess = document.createElement("button");
+			acceptCommunityAccess.type = "submit";
+			acceptCommunityAccess.textContent = "Accept";
+			acceptCommunityAccess.style.height = "2rem";
+			acceptCommunityAccess.style.padding = ".35rem .7rem";
+			acceptCommunityAccess.style.border = "0";
+			acceptCommunityAccess.style.borderRadius = ".55rem";
+			acceptCommunityAccess.style.color = colors.background;
+			acceptCommunityAccess.style.background = colors.accent;
+			acceptCommunityAccess.style.fontWeight = "700";
+			communityAccessForm.appendChild(acceptCommunityAccess);
+
+			const declineCommunityAccess = document.createElement("button");
+			declineCommunityAccess.type = "button";
+			declineCommunityAccess.textContent = "Decline";
+			declineCommunityAccess.style.height = "2rem";
+			declineCommunityAccess.style.padding = ".35rem .7rem";
+			declineCommunityAccess.style.border = "1px solid " + colors.line;
+			declineCommunityAccess.style.borderRadius = ".55rem";
+			declineCommunityAccess.style.color = colors.text;
+			declineCommunityAccess.style.background = colors.backgroundSoft;
+			communityAccessForm.appendChild(declineCommunityAccess);
+
+			const communityAccessStatus = document.createElement("small");
+			communityAccessStatus.hidden = true;
+			communityAccessStatus.style.margin = "0";
+			communityAccessStatus.style.color = colors.muted;
+			communityAccessPanel.appendChild(communityAccessStatus);
+
+			const participantActions = document.createElement("div");
+			participantActions.style.display = "flex";
+			participantActions.style.justifyContent = "space-between";
+			participantActions.style.alignItems = "center";
+
+			const participantTitle = document.createElement("strong");
+			participantTitle.textContent = "Users";
+			participantActions.appendChild(participantTitle);
+
+			const manageRulesButton = document.createElement("button");
+			manageRulesButton.type = "button";
+			manageRulesButton.textContent = "Rules";
+			manageRulesButton.style.padding = ".25rem .45rem";
+			manageRulesButton.style.border = "1px solid " + colors.line;
+			manageRulesButton.style.borderRadius = ".45rem";
+			manageRulesButton.style.color = colors.label;
+			manageRulesButton.style.background = "transparent";
+			participantActions.appendChild(manageRulesButton);
+
+			const participantList = document.createElement("div");
+			participantList.style.display = "grid";
+			participantList.style.gap = ".2rem";
+
+			const participantsPanel = document.createElement("aside");
+			participantsPanel.style.width = "100%";
+			participantsPanel.style.minWidth = "0";
+			participantsPanel.style.display = "grid";
+			participantsPanel.style.alignContent = "start";
+			participantsPanel.style.gap = ".5rem";
+			participantsPanel.style.padding = ".55rem";
+			participantsPanel.style.border = "1px solid " + colors.line;
+			participantsPanel.style.borderRadius = ".65rem";
+			participantsPanel.style.boxSizing = "border-box";
+			participantsPanel.style.background = colors.panelSoft;
+			content.insertBefore(participantsPanel, sharepadPanel);
+			participantsPanel.append(participantActions, participantList);
+
+			const chatIdentityForm = document.createElement("form");
+			chatIdentityForm.style.display = "flex";
+			chatIdentityForm.style.alignItems = "center";
+			chatIdentityForm.style.gap = ".5rem";
+
+			const chatNameInput = document.createElement("input");
+			chatNameInput.id = "chat-name";
+			chatNameInput.setAttribute("aria-label", "Chat name");
+			chatNameInput.type = "text";
+			chatNameInput.maxLength = 40;
+			chatNameInput.required = true;
+			chatNameInput.placeholder = "Name";
+			chatNameInput.autocomplete = "name";
+			chatNameInput.style.height = "2rem";
+			chatNameInput.style.padding = ".4rem .65rem";
+			chatNameInput.style.border = "1px solid " + colors.line;
+			chatNameInput.style.borderRadius = ".55rem";
+			chatNameInput.style.boxSizing = "border-box";
+			chatNameInput.style.color = colors.text;
+			chatNameInput.style.background = colors.backgroundSoft;
+			chatNameInput.style.width = "10rem";
+			chatIdentityForm.appendChild(chatNameInput);
+
+			const saveChatNameButton = document.createElement("button");
+			saveChatNameButton.type = "submit";
+			saveChatNameButton.textContent = "Save name";
+			saveChatNameButton.style.height = "2rem";
+			saveChatNameButton.style.padding = ".35rem .65rem";
+			saveChatNameButton.style.border = "1px solid " + colors.accent;
+			saveChatNameButton.style.borderRadius = ".55rem";
+			saveChatNameButton.style.boxSizing = "border-box";
+			saveChatNameButton.style.color = colors.accentStrong;
+			saveChatNameButton.style.background = colors.backgroundSoft;
+			const nameActionWrap = document.createElement("span");
+			nameActionWrap.style.display = "inline-flex";
+			nameActionWrap.appendChild(saveChatNameButton);
+			chatIdentityForm.appendChild(nameActionWrap);
+
+			chatIdentityForm.style.marginLeft = "auto";
+			chatIdentityForm.style.minWidth = "0";
+			connectionPanel.appendChild(chatIdentityForm);
+
+			const chatLog = document.createElement("div");
+			chatLog.setAttribute("aria-live", "polite");
+			chatLog.style.display = "grid";
+			chatLog.style.alignContent = "start";
+			chatLog.style.gap = ".4rem";
+			chatLog.style.height = "12rem";
+			chatLog.style.padding = ".4rem";
+			chatLog.style.overflowY = "auto";
+			chatLog.style.border = "1px solid " + colors.line;
+			chatLog.style.borderRadius = ".55rem";
+			chatLog.style.boxSizing = "border-box";
+			chatLog.style.background = colors.backgroundSoft;
+			chatPanel.appendChild(chatLog);
+
+			const chatForm = document.createElement("form");
+			chatForm.style.display = "flex";
+			chatForm.style.flexWrap = "wrap";
+			chatForm.style.gap = ".5rem";
+			chatPanel.appendChild(chatForm);
+
+			const chatInput = document.createElement("input");
+			chatInput.type = "text";
+			chatInput.maxLength = CHAT_MESSAGE_MAX_LENGTH;
+			chatInput.placeholder = "Write a message";
+			chatInput.autocomplete = "off";
+			chatInput.style.minWidth = "12rem";
+			chatInput.style.height = "2rem";
+			chatInput.style.flex = "1";
+			chatInput.style.padding = ".4rem .65rem";
+			chatInput.style.border = "1px solid " + colors.line;
+			chatInput.style.borderRadius = ".55rem";
+			chatInput.style.boxSizing = "border-box";
+			chatInput.style.color = colors.text;
+			chatInput.style.background = colors.backgroundSoft;
+			chatForm.appendChild(chatInput);
+
+			const sendChatButton = document.createElement("button");
+			sendChatButton.type = "submit";
+			sendChatButton.textContent = "Send";
+			sendChatButton.style.height = "2rem";
+			sendChatButton.style.padding = ".4rem .7rem";
+			sendChatButton.style.border = "0";
+			sendChatButton.style.borderRadius = ".55rem";
+			sendChatButton.style.color = colors.background;
+			sendChatButton.style.background = colors.accent;
+			sendChatButton.style.fontWeight = "700";
+			sendChatButton.style.cursor = "pointer";
+			chatForm.appendChild(sendChatButton);
+
+			const controls = document.createElement("section");
+			controls.hidden = isReceiver;
+			controls.style.display = isReceiver ? "none" : "grid";
+			controls.style.gap = ".75rem";
+			controls.style.flex = "1 1 16rem";
+			content.appendChild(controls);
+
+			const streamControls = document.createElement("section");
+			streamControls.style.padding = ".75rem";
+			streamControls.style.border = "1px solid " + colors.line;
+			streamControls.style.borderRadius = ".65rem";
+			streamControls.style.background = colors.panel;
+			controls.appendChild(streamControls);
+
+			const streamStatus = document.createElement("p");
+			streamStatus.textContent = "No active stream";
+			streamStatus.style.margin = "0 0 .5rem";
+			streamStatus.style.color = colors.muted;
+			streamControls.appendChild(streamStatus);
+
+			const startStream = document.createElement("button");
+			startStream.type = "button";
+			startStream.textContent = "Share screen";
+			startStream.style.height = "2rem";
+			startStream.style.marginRight = ".5rem";
+			startStream.style.padding = ".4rem .7rem";
+			startStream.style.border = "0";
+			startStream.style.borderRadius = ".55rem";
+			startStream.style.color = colors.background;
+			startStream.style.background = colors.accent;
+			startStream.style.fontWeight = "700";
+			startStream.style.cursor = "pointer";
+			streamControls.appendChild(startStream);
+
+			const stopStream = document.createElement("button");
+			stopStream.type = "button";
+			stopStream.textContent = "Stop stream";
+			stopStream.hidden = true;
+			stopStream.disabled = true;
+			stopStream.style.height = "2rem";
+			stopStream.style.padding = ".4rem .7rem";
+			stopStream.style.border = "1px solid " + colors.danger;
+			stopStream.style.borderRadius = ".55rem";
+			stopStream.style.color = colors.background;
+			stopStream.style.background = colors.danger;
+			stopStream.style.fontWeight = "700";
+			stopStream.style.cursor = "pointer";
+			streamControls.appendChild(stopStream);
+
+			const roomMain = document.createElement("div");
+			roomMain.className = "room-main";
+			roomMain.style.flex = "1 1 40rem";
+			content.appendChild(roomMain);
+			streamPanel.classList.add("full-width");
+			controllerAccessPanel.classList.add("full-width");
+			navigationPanel.classList.add("full-width");
+			communityAccessPanel.classList.add("full-width");
+			if (isReceiver) sharepadPanel.classList.add("full-width");
+			chatPanel.classList.add("full-width");
+			roomMain.append(streamPanel, controllerAccessPanel, navigationPanel, communityAccessPanel, chatPanel, sharepadPanel, controls);
+
+			const linkDialog = document.createElement("dialog");
+			linkDialog.style.width = "min(32rem,calc(100% - 2rem))";
+			linkDialog.style.border = "1px solid " + colors.line;
+			linkDialog.style.borderRadius = ".8rem";
+			linkDialog.style.color = colors.text;
+			linkDialog.style.background = colors.panel;
+			document.body.appendChild(linkDialog);
+
+			const dialogForm = document.createElement("form");
+			dialogForm.method = "dialog";
+			linkDialog.appendChild(dialogForm);
+
+			const receivedLink = document.createElement("p");
+			receivedLink.style.overflowWrap = "anywhere";
+			receivedLink.style.color = colors.accentStrong;
+			dialogForm.appendChild(receivedLink);
+
+			const ignoreLink = document.createElement("button");
+			ignoreLink.value = "cancel";
+			ignoreLink.textContent = "Decline";
+			ignoreLink.style.marginRight = ".5rem";
+			dialogForm.appendChild(ignoreLink);
+
+			const openLink = document.createElement("button");
+			openLink.value = "default";
+			openLink.textContent = "Open";
+			openLink.style.border = "0";
+			openLink.style.borderRadius = ".55rem";
+			openLink.style.padding = ".45rem .75rem";
+			openLink.style.color = colors.background;
+			openLink.style.background = colors.accent;
+			dialogForm.appendChild(openLink);
+
+			const ignoreLinkUser = document.createElement("button");
+			ignoreLinkUser.type = "button";
+			ignoreLinkUser.textContent = "Decline and ignore user";
+			ignoreLinkUser.style.marginLeft = ".5rem";
+			ignoreLinkUser.style.border = "1px solid " + colors.warning;
+			ignoreLinkUser.style.borderRadius = ".55rem";
+			ignoreLinkUser.style.padding = ".4rem .7rem";
+			ignoreLinkUser.style.color = colors.warning;
+			ignoreLinkUser.style.background = colors.backgroundSoft;
+			dialogForm.appendChild(ignoreLinkUser);
+
+			const userMenu = document.createElement("div");
+			userMenu.className = "user-context-menu";
+			userMenu.hidden = true;
+			userMenu.tabIndex = -1;
+			userMenu.setAttribute("role", "menu");
+			userMenu.style.position = "fixed";
+			userMenu.style.zIndex = "1000";
+			userMenu.style.display = "none";
+			userMenu.style.width = "min(15rem,calc(100vw - 1rem))";
+			userMenu.style.padding = ".45rem";
+			userMenu.style.border = "1px solid " + colors.line;
+			userMenu.style.borderRadius = ".6rem";
+			userMenu.style.boxSizing = "border-box";
+			userMenu.style.color = colors.text;
+			userMenu.style.background = colors.panel;
+			userMenu.style.boxShadow = "0 .7rem 2rem rgba(0,0,0,.4)";
+			document.body.appendChild(userMenu);
+
+			const userMenuHeader = document.createElement("div");
+			userMenuHeader.style.display = "flex";
+			userMenuHeader.style.alignItems = "center";
+			userMenuHeader.style.gap = ".4rem";
+			userMenuHeader.style.padding = ".25rem .3rem .45rem";
+			userMenuHeader.style.borderBottom = "1px solid " + colors.line;
+			userMenu.appendChild(userMenuHeader);
+
+			const userMenuTitle = document.createElement("strong");
+			userMenuTitle.style.minWidth = "0";
+			userMenuTitle.style.flex = "1";
+			userMenuTitle.style.overflow = "hidden";
+			userMenuTitle.style.textOverflow = "ellipsis";
+			userMenuTitle.style.whiteSpace = "nowrap";
+			userMenuHeader.appendChild(userMenuTitle);
+
+			const userMenuMode = document.createElement("span");
+			userMenuHeader.appendChild(userMenuMode);
+
+			const userRuleToggles = document.createElement("div");
+			userRuleToggles.style.display = "grid";
+			userRuleToggles.style.gap = ".15rem";
+			userRuleToggles.style.paddingTop = ".3rem";
+			userMenu.appendChild(userRuleToggles);
+
+			const rulesDialog = document.createElement("dialog");
+			rulesDialog.style.width = "min(32rem,calc(100% - 2rem))";
+			rulesDialog.style.border = "1px solid " + colors.line;
+			rulesDialog.style.borderRadius = ".8rem";
+			rulesDialog.style.color = colors.text;
+			rulesDialog.style.background = colors.panel;
+			document.body.appendChild(rulesDialog);
+
+			const nameConfirmDialog = document.createElement("dialog");
+			nameConfirmDialog.style.width = "min(28rem,calc(100% - 2rem))";
+			nameConfirmDialog.style.border = "1px solid " + colors.line;
+			nameConfirmDialog.style.borderRadius = ".8rem";
+			nameConfirmDialog.style.color = colors.text;
+			nameConfirmDialog.style.background = colors.panel;
+			const nameConfirmText = document.createElement("strong");
+			nameConfirmText.style.display = "block";
+			nameConfirmText.style.fontSize = "1.5rem";
+			nameConfirmText.style.color = colors.accent;
+			nameConfirmDialog.appendChild(nameConfirmText);
+			const nameConfirmHint = document.createElement("p");
+			nameConfirmHint.textContent = "This name cannot be changed again for 48 hours.";
+			nameConfirmDialog.appendChild(nameConfirmHint);
+			const confirmName = document.createElement("button");
+			confirmName.type = "button";
+			confirmName.textContent = "Confirm";
+			confirmName.style.height = "2.25rem";
+			confirmName.style.padding = ".4rem .75rem";
+			confirmName.style.border = "0";
+			confirmName.style.borderRadius = ".55rem";
+			confirmName.style.color = colors.background;
+			confirmName.style.background = colors.accent;
+			confirmName.style.fontWeight = "700";
+			nameConfirmDialog.appendChild(confirmName);
+			const cancelName = document.createElement("button");
+			cancelName.type = "button";
+			cancelName.textContent = "Cancel";
+			cancelName.style.marginLeft = ".5rem";
+			cancelName.style.height = "2.25rem";
+			cancelName.style.padding = ".4rem .75rem";
+			cancelName.style.border = "1px solid " + colors.line;
+			cancelName.style.borderRadius = ".55rem";
+			cancelName.style.color = colors.text;
+			cancelName.style.background = colors.backgroundSoft;
+			nameConfirmDialog.appendChild(cancelName);
+			document.body.appendChild(nameConfirmDialog);
+
+			let connection = null;
+			let connectionGeneration = 0;
+			let roomReady = false;
+			let relayConnected = false;
+			let currentRoomId = roomInput.value;
+			let roomFromUrl = params.has("room");
+			let peerCount = 0;
+			let padState = {text: "", version: {counter: 0, peerId: ""}, actor: null};
+			let streamState = {mode: "home", stream: null, version: {counter: 0, peerId: ""}, actor: null};
+			let userRules = {};
+			const participants = new Map();
+			let padSendTimer = 0;
+			let noticeTimer = 0;
+			let pendingUrl = "";
+			let pendingLinkActor = null;
+			let pendingChatProfile = null;
+			let pendingCommunityAcceptance = false;
+			const pendingOutgoingChatMessages = [];
+			let publisherWindow = null;
+			let publisherStreamId = "";
+			let publisherMonitor = 0;
+			let renderedStreamId = "";
+			let chatProfile = null;
+			let communityAccessAccepted = false;
+			let chatCooldownTimer = 0;
+
+			function setNotice(message, isError = false, persistent = false) {
+				clearTimeout(noticeTimer);
+				notice.textContent = message;
+				notice.style.color = isError ? colors.danger : colors.text;
+				notice.style.visibility = "visible";
+				if (!persistent) noticeTimer = setTimeout(() => { notice.style.visibility = "hidden"; }, 5000);
+			}
+
+			function validateHttpUrl(value) {
+				try {
+					const url = new URL(value);
+					return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+				} catch {
+					return "";
+				}
+			}
+
+			function normalizeHttpUrl(value) {
+				const candidate = value.trim();
+				return validateHttpUrl(/^[a-z][a-z\d+.-]*:\/\//i.test(candidate) ? candidate : "https://" + candidate);
+			}
+
+			function formatRemainingTime(milliseconds) {
+				const totalMinutes = Math.ceil(milliseconds / 60000);
+				const hours = Math.floor(totalMinutes / 60);
+				const minutes = totalMinutes % 60;
+				return hours + "h " + minutes + "m";
+			}
+
+			function renderChatIdentity() {
+				clearTimeout(chatCooldownTimer);
+				const remaining = chatProfile ? Math.max(0, chatProfile.changedAt + CHAT_NAME_CHANGE_DELAY_MS - Date.now()) : 0;
+				const canChange = Boolean(chatProfile) && remaining === 0;
+				chatIdentityForm.hidden = !communityAccessAccepted;
+				chatIdentityForm.style.display = communityAccessAccepted ? "flex" : "none";
+				chatLog.hidden = !communityAccessAccepted;
+				chatLog.style.display = communityAccessAccepted ? "grid" : "none";
+				chatForm.hidden = !communityAccessAccepted;
+				chatForm.style.display = communityAccessAccepted ? "flex" : "none";
+				if (chatProfile) {
+					if (document.activeElement !== chatNameInput) chatNameInput.value = chatProfile.name;
+					if (document.activeElement !== communityNicknameInput) communityNicknameInput.value = chatProfile.name;
+					saveChatNameButton.textContent = "Change name";
+					saveChatNameButton.disabled = !canChange;
+					nameActionWrap.title = canChange ? "Change chat name" : "Name can be changed in " + formatRemainingTime(remaining) + ".";
+					if (remaining) chatCooldownTimer = window.setTimeout(renderChatIdentity, Math.min(remaining, 60000));
+				} else {
+					chatNameInput.placeholder = "Nickname (optional)";
+					saveChatNameButton.textContent = "Save name";
+					saveChatNameButton.disabled = false;
+					nameActionWrap.title = "";
+				}
+			}
+
+			function readCommunityAccess() {
+				try {
+					const candidate = JSON.parse(localStorage.getItem(COMMUNITY_ACCESS_KEY) || "null");
+					communityAccessAccepted = candidate?.version === COMMUNITY_ACCESS_VERSION && Number.isSafeInteger(candidate.acceptedAt);
+				} catch {
+					communityAccessAccepted = false;
+				}
+			}
+
+			function grantCommunityAccess() {
+				communityAccessAccepted = true;
+				communityAccessStatus.hidden = true;
+				try {
+					localStorage.setItem(COMMUNITY_ACCESS_KEY, JSON.stringify({version: COMMUNITY_ACCESS_VERSION, acceptedAt: Date.now()}));
+				} catch {
+					setNotice("Community acceptance could not be saved.", true);
+				}
+				if (roomReady) {
+					const actor = currentActor();
+					if (USER_ID_PATTERN.test(actor.userId)) {
+						participants.set(actor.userId, {...actor, peerId: selfId});
+						renderParticipants();
+						connection?.sendProfile(actor);
+					}
+				}
+				renderChatIdentity();
+				render();
+			}
+
+			function readChatProfile() {
+				try {
+					const candidate = JSON.parse(localStorage.getItem(CHAT_PROFILE_KEY) || "null");
+					if (typeof candidate?.name === "string" && candidate.name.trim() && candidate.name.length <= 40 && Number.isSafeInteger(candidate.changedAt)) {
+						chatProfile = {userId: USER_ID_PATTERN.test(candidate.userId || "") ? candidate.userId : getUserId(), name: candidate.name.trim(), changedAt: candidate.changedAt};
+						localStorage.setItem(CHAT_PROFILE_KEY, JSON.stringify(chatProfile));
+					}
+				} catch {
+					chatProfile = null;
+				}
+			}
+
+			function getUserId() {
+				try {
+					const stored = localStorage.getItem("userId");
+					if (USER_ID_PATTERN.test(stored || "")) return stored;
+					const userId = [...crypto.getRandomValues(new Uint8Array(16))].map(value => value.toString(16).padStart(2, "0")).join("");
+					localStorage.setItem("userId", userId);
+					return userId;
+				} catch {
+					return "";
+				}
+			}
+
+			function currentActor() {
+				return {userId: chatProfile?.userId || getUserId(), name: chatProfile?.name || "", mode: isReceiver ? "VR" : "Web"};
+			}
+
+			function isIgnored(actor, rule) {
+				return Boolean(actor?.userId && userRules[actor.userId]?.[rule]);
+			}
+
+			function saveUserRules() {
+				try { localStorage.setItem(USER_RULES_KEY, JSON.stringify(userRules)); } catch { setNotice("User rules could not be saved.", true); }
+			}
+
+			function createModeBadge(mode) {
+				const badge = document.createElement("span");
+				badge.className = "mode-badge " + (mode === "VR" ? "mode-vr" : "mode-web");
+				badge.textContent = mode;
+				return badge;
+			}
+
+			function closeUserMenu() {
+				userMenu.hidden = true;
+				userMenu.style.display = "none";
+			}
+
+			function openUserMenu(actor, clientX, clientY, anchor) {
+				if (!actor || !USER_ID_PATTERN.test(actor.userId || "")) return;
+				userMenuTitle.textContent = (actor.name || "Anonymous") + " · " + actor.userId.slice(0, 8);
+				userMenuMode.replaceChildren();
+				if (actor.mode === "VR" || actor.mode === "Web") userMenuMode.appendChild(createModeBadge(actor.mode));
+				userRuleToggles.replaceChildren();
+				for (const [key, label] of [["chatSharepad", "Ignore chat and Sharepad"], ["streamLinks", "Ignore links and streams"]]) {
+					const labelElement = document.createElement("label");
+					labelElement.setAttribute("role", "menuitemcheckbox");
+					labelElement.style.display = "flex";
+					labelElement.style.alignItems = "center";
+					labelElement.style.gap = ".45rem";
+					labelElement.style.padding = ".4rem .3rem";
+					labelElement.style.borderRadius = ".4rem";
+					labelElement.style.cursor = "pointer";
+					const input = document.createElement("input");
+					input.type = "checkbox";
+					input.style.accentColor = colors.warning;
+					input.checked = Boolean(userRules[actor.userId]?.[key]);
+					labelElement.setAttribute("aria-checked", String(input.checked));
+					input.addEventListener("change", () => {
+						userRules[actor.userId] = {...userRules[actor.userId], name: actor.name || "Anonymous", [key]: input.checked};
+						if (!userRules[actor.userId].chatSharepad && !userRules[actor.userId].streamLinks) delete userRules[actor.userId];
+						labelElement.setAttribute("aria-checked", String(input.checked));
+						saveUserRules();
+					});
+					labelElement.append(input, document.createTextNode(" " + label));
+					userRuleToggles.appendChild(labelElement);
+				}
+				userMenu.hidden = false;
+				userMenu.style.display = "grid";
+				userMenu.style.left = "0";
+				userMenu.style.top = "0";
+				const anchorBounds = anchor?.getBoundingClientRect();
+				const bounds = userMenu.getBoundingClientRect();
+				const x = Number.isFinite(clientX) ? clientX : anchorBounds?.left || 0;
+				const y = Number.isFinite(clientY) ? clientY : (anchorBounds?.bottom || 0) + 4;
+				userMenu.style.left = Math.max(8, Math.min(x, innerWidth - bounds.width - 8)) + "px";
+				userMenu.style.top = Math.max(8, Math.min(y, innerHeight - bounds.height - 8)) + "px";
+				userMenu.focus();
+			}
+
+			function bindUserMenu(element, actor) {
+				element.addEventListener("click", () => openUserMenu(actor, undefined, undefined, element));
+				element.addEventListener("contextmenu", event => {
+					event.preventDefault();
+					openUserMenu(actor, event.clientX, event.clientY, element);
+				});
+			}
+
+			function renderParticipants() {
+				participantList.replaceChildren();
+				participantTitle.textContent = "Users · " + participants.size;
+				for (const actor of participants.values()) {
+					const button = document.createElement("button");
+					button.className = "participant-row";
+					button.type = "button";
+					button.textContent = (actor.name || "Anonymous") + " · " + actor.userId.slice(0, 8) + " (" + actor.mode + ")";
+					const dot = document.createElement("span");
+					dot.className = "participant-dot";
+					const identity = document.createElement("span");
+					identity.className = "participant-identity";
+					identity.textContent = actor.name || "Anonymous";
+					const meta = document.createElement("span");
+					meta.className = "participant-meta";
+					const shortId = document.createElement("span");
+					shortId.className = "participant-id";
+					shortId.textContent = actor.userId.slice(0, 8);
+					meta.append(shortId, createModeBadge(actor.mode));
+					identity.appendChild(meta);
+					button.replaceChildren(dot, identity);
+					bindUserMenu(button, actor);
+					participantList.appendChild(button);
+				}
+			}
+
+			function appendChatMessage(message) {
+				const item = document.createElement("article");
+				item.className = "chat-message";
+				const sender = document.createElement("button");
+				sender.type = "button";
+				const timestamp = new Date(message.timestamp).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+				sender.textContent = message.actor.name || "Anonymous";
+				sender.title = message.actor.userId.slice(0, 8) + " · " + message.actor.mode;
+				sender.style.padding = ".35rem 0";
+				sender.style.overflow = "hidden";
+				sender.style.border = "0";
+				sender.style.color = colors.label;
+				sender.style.background = "transparent";
+				sender.style.fontWeight = "700";
+				sender.style.textAlign = "left";
+				sender.style.textOverflow = "ellipsis";
+				sender.style.whiteSpace = "nowrap";
+				sender.style.cursor = "pointer";
+				bindUserMenu(sender, message.actor);
+				const text = document.createElement("div");
+				text.textContent = message.text;
+				text.title = timestamp;
+				text.style.padding = ".35rem .5rem";
+				text.style.border = "1px solid " + colors.line;
+				text.style.borderRadius = ".5rem";
+				text.style.background = colors.panelSoft;
+				text.style.overflowWrap = "anywhere";
+				item.append(sender, text);
+				chatLog.appendChild(item);
+				chatLog.scrollTop = chatLog.scrollHeight;
+			}
+
+			function appendChatEvent(text, timestamp = Date.now()) {
+				const item = document.createElement("div");
+				item.className = "chat-event";
+				item.textContent = new Date(timestamp).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) + " · " + text;
+				chatLog.appendChild(item);
+				chatLog.scrollTop = chatLog.scrollHeight;
+			}
+
+			function activityText(activity) {
+				const name = activity.actor.name || "Anonymous";
+				if (activity.kind === "quicklink") return name + " went to " + activity.destination + ".";
+				if (activity.kind === "stream") {
+					const owner = streamState.stream?.id === activity.destination ? streamState.actor?.name : "";
+					return name + " went to " + (owner ? "the stream from " + owner : "stream " + activity.destination.slice(0, 8)) + ".";
+				}
+				return name + " visited a website.";
+			}
+
+			function isValidActivity(activity) {
+				if (!activity || !isValidActor(activity.actor) || !Number.isSafeInteger(activity.timestamp)) return false;
+				if (activity.kind === "website") return activity.destination === "";
+				if (activity.kind === "stream") return STREAM_ID_PATTERN.test(activity.destination || "");
+				return activity.kind === "quicklink" && WEBSITE_PRESETS.some(([label]) => label === activity.destination);
+			}
+
+			function announceActivity(kind, destination = "") {
+				if (!roomReady) return;
+				const activity = {actor: currentActor(), kind, destination, timestamp: Date.now()};
+				if (!isValidActivity(activity)) return;
+				appendChatEvent(activityText(activity), activity.timestamp);
+				connection?.sendActivity(activity).catch(error => setNotice("Activity send failed: " + (error instanceof Error ? error.message : String(error)), true));
+			}
+
+			function sendChatMessage(text) {
+				if (!communityAccessAccepted) return;
+				const message = {
+					actor: currentActor(),
+					text,
+					timestamp: Date.now()
+				};
+				appendChatMessage(message);
+				chatInput.value = "";
+				const activeConnection = connection;
+				if (!activeConnection) return pendingOutgoingChatMessages.push(message);
+				activeConnection.sendChat(message).catch(error => setNotice("Chat send failed: " + (error instanceof Error ? error.message : String(error)), true));
+			}
+
+			function clonePadState(state) {
+				return {text: state.text, version: {...state.version}, actor: state.actor ? {...state.actor} : null};
+			}
+
+			function cloneStreamState(state) {
+				return {mode: state.mode, stream: state.stream ? {id: state.stream.id} : null, version: {...state.version}, actor: state.actor ? {...state.actor} : null};
+			}
+
+			function isValidActor(actor) {
+				return actor && USER_ID_PATTERN.test(actor.userId || "") && typeof actor.name === "string" && actor.name.length <= 40 && (actor.mode === "Web" || actor.mode === "VR");
+			}
+
+			function isValidPadState(state) {
+				return state && typeof state.text === "string" && Number.isSafeInteger(state.version?.counter) && typeof state.version?.peerId === "string" && isValidActor(state.actor);
+			}
+
+			function isValidStreamState(state) {
+				return state && Number.isSafeInteger(state.version?.counter) && typeof state.version?.peerId === "string" && isValidActor(state.actor) && ((state.mode === "home" && state.stream === null) || (state.mode === "stream" && STREAM_ID_PATTERN.test(state.stream?.id)));
+			}
+
+			function openUrl(url) {
+				const popup = window.open("about:blank", "_blank");
+				if (!popup) return false;
+				popup.opener = null;
+				popup.location.replace(url);
+				return true;
+			}
+
+			function closePublisher() {
+				clearInterval(publisherMonitor);
+				publisherMonitor = 0;
+				publisherWindow?.close();
+				publisherWindow = null;
+				publisherStreamId = "";
+			}
+
+			function leaveRoom(removeRoomParameter) {
+				connectionGeneration += 1;
+				clearTimeout(padSendTimer);
+				connection?.leave();
+				connection = null;
+				roomReady = false;
+				relayConnected = false;
+				closePublisher();
+				peerCount = 0;
+				padState = {text: "", version: {counter: 0, peerId: ""}, actor: null};
+				streamState = {mode: "home", stream: null, version: {counter: 0, peerId: ""}, actor: null};
+				participants.clear();
+				pendingOutgoingChatMessages.length = 0;
+				renderParticipants();
+				renderedStreamId = "";
+				chatLog.replaceChildren();
+				if (removeRoomParameter) {
+					roomFromUrl = false;
+					const nextUrl = new URL(location.href);
+					nextUrl.searchParams.delete("room");
+					history.replaceState(null, "", nextUrl);
+				}
+				render();
+			}
+
+			function updatePadState(text) {
+				padState = {text, version: {counter: padState.version.counter + 1, peerId: selfId}, actor: currentActor()};
+				render();
+				return clonePadState(padState);
+			}
+
+			function updateStreamState(mode, stream) {
+				streamState = {mode, stream, version: {counter: streamState.version.counter + 1, peerId: selfId}, actor: currentActor()};
+				render();
+				return cloneStreamState(streamState);
+			}
+
+			function renderLinks() {
+				const urls = [...new Set((padState.text.match(URL_PATTERN) || []).map(value => validateHttpUrl(value.replace(TRAILING_PUNCTUATION, ""))).filter(Boolean))];
+				detectedLinks.replaceChildren();
+				for (const url of urls) {
+					const item = document.createElement("li");
+					const link = document.createElement("a");
+					link.href = url;
+					link.target = "_blank";
+					link.rel = "noopener noreferrer";
+					link.textContent = url;
+					link.style.color = colors.accentStrong;
+					link.style.overflowWrap = "anywhere";
+					item.appendChild(link);
+					detectedLinks.appendChild(item);
+				}
+			}
+
+			function render() {
+				const streamId = streamState.mode === "stream" ? streamState.stream.id : "";
+				const connected = Boolean(connection);
+				const joined = connected && roomReady;
+				if (isReceiver) {
+					const controllerUrl = new URL(location.pathname, location.origin);
+					controllerUrl.searchParams.set("room", currentRoomId);
+					controllerAccessUrl.textContent = controllerUrl.href;
+					controllerAccessRoom.textContent = "Room: " + currentRoomId;
+				}
+				roomLabel.hidden = roomFromUrl && connected;
+				roomInput.hidden = roomFromUrl && connected;
+				joinButton.hidden = roomFromUrl && connected;
+				leaveButton.hidden = !roomFromUrl || !connected;
+				roomForm.style.flex = roomFromUrl && connected ? "0" : "1 1 auto";
+				content.hidden = !isReceiver && !joined;
+				content.classList.toggle("solo", !joined);
+				participantsPanel.hidden = !joined;
+				participantsPanel.style.display = joined ? "grid" : "none";
+				controllerAccessPanel.hidden = !isReceiver || !joined;
+				controllerAccessPanel.style.display = isReceiver && joined ? "grid" : "none";
+				navigationPanel.hidden = !isReceiver && !joined;
+				navigationPanel.style.display = isReceiver || joined ? "grid" : "none";
+				communityAccessPanel.hidden = !joined || communityAccessAccepted;
+				communityAccessPanel.style.display = joined && !communityAccessAccepted ? "grid" : "none";
+				chatPanel.hidden = !joined || !communityAccessAccepted;
+				chatPanel.style.display = joined && communityAccessAccepted ? "grid" : "none";
+				sharepadPanel.hidden = !joined || !communityAccessAccepted || (isReceiver && Boolean(streamId));
+				controls.hidden = isReceiver || !joined;
+				controls.style.display = !isReceiver && joined ? "grid" : "none";
+				addressInput.disabled = !isReceiver && (!connected || !roomReady);
+				openAddressButton.disabled = !isReceiver && (!connected || !roomReady);
+				sendLinkCheckbox.disabled = !connected || !roomReady;
+				if (!connected) sendLinkCheckbox.checked = false;
+				if (!connected) {
+					connectionStatus.textContent = "● Disconnected";
+					connectionStatus.style.color = colors.muted;
+				} else if (peerCount) {
+					connectionStatus.textContent = relayConnected ? "● Connected" : "● Connected · Signaling reconnecting…";
+					connectionStatus.style.color = "#5cca8f";
+				} else if (!roomReady) {
+					connectionStatus.textContent = "● Connecting…";
+					connectionStatus.style.color = colors.accentStrong;
+				} else if (!relayConnected) {
+					connectionStatus.textContent = "● Reconnecting…";
+					connectionStatus.style.color = colors.accentStrong;
+				} else {
+					connectionStatus.textContent = "● Ready";
+					connectionStatus.style.color = colors.label;
+				}
+				participantCount.textContent = connected && !roomReady ? "Searching for users" : connected ? String(peerCount + 1) + " user" + (peerCount ? "s" : "") : "0 users";
+				if (sharepad.value !== padState.text) sharepad.value = padState.text;
+				streamStatus.textContent = streamId ? "Stream active" : "No active stream";
+				startStream.disabled = !connected || Boolean(streamId);
+				stopStream.hidden = !streamId;
+				stopStream.disabled = !connected || !streamId;
+				renderLinks();
+				streamPanel.hidden = !isReceiver || !joined || !streamId;
+				if (!isReceiver) return;
+				if (!streamId) {
+					renderedStreamId = "";
+					streamFrame.removeAttribute("src");
+					streamLink.removeAttribute("href");
+				} else if (renderedStreamId !== streamId) {
+					const viewUrl = new URL(VDO_BASE_URL);
+					viewUrl.searchParams.set("view", streamId);
+					renderedStreamId = streamId;
+					streamLink.href = viewUrl.href;
+					streamFrame.src = viewUrl.href;
+					announceActivity("stream", streamId);
+				}
+			}
+
+			function joinRoom(roomId, updateUrl = false) {
+				const normalizedRoomId = roomId.trim();
+				if (!normalizedRoomId) return setNotice("Room ID is required.", true);
+				leaveRoom(false);
+				currentRoomId = normalizedRoomId;
+				roomFromUrl = updateUrl || roomFromUrl;
+				if (updateUrl) {
+					const nextUrl = new URL(location.href);
+					nextUrl.searchParams.set("room", currentRoomId);
+					history.replaceState(null, "", nextUrl);
+				}
+				const generation = connectionGeneration;
+				try {
+					connection = createRoomConnection(currentRoomId, {
+						getState: () => ({pad: clonePadState(padState), stream: cloneStreamState(streamState)}),
+						onRelayStatus: ready => {
+							if (generation !== connectionGeneration) return;
+							relayConnected = ready;
+							if (!ready || roomReady) return render();
+							roomReady = true;
+							const actor = currentActor();
+							if (USER_ID_PATTERN.test(actor.userId)) {
+								participants.set(actor.userId, {...actor, peerId: selfId});
+								connection.sendProfile(actor);
+								renderParticipants();
+							}
+							for (const message of pendingOutgoingChatMessages.splice(0)) {
+								connection.sendChat(message).catch(error => setNotice("Chat send failed: " + (error instanceof Error ? error.message : String(error)), true));
+							}
+							render();
+						},
+						onState: snapshot => {
+							if (generation !== connectionGeneration) return;
+							if (isValidPadState(snapshot?.pad) && !isIgnored(snapshot.pad.actor, "chatSharepad")) padState = clonePadState(snapshot.pad);
+							if (isValidStreamState(snapshot?.stream) && !isIgnored(snapshot.stream.actor, "streamLinks")) streamState = cloneStreamState(snapshot.stream);
+							render();
+						},
+						onPad: candidate => {
+							const newer = candidate?.version?.counter > padState.version.counter || (candidate?.version?.counter === padState.version.counter && candidate?.version?.peerId > padState.version.peerId);
+							if (generation !== connectionGeneration || !isValidPadState(candidate) || !newer || isIgnored(candidate.actor, "chatSharepad")) return;
+							padState = clonePadState(candidate);
+							render();
+						},
+						onStream: candidate => {
+							const newer = candidate?.version?.counter > streamState.version.counter || (candidate?.version?.counter === streamState.version.counter && candidate?.version?.peerId > streamState.version.peerId);
+							if (generation !== connectionGeneration || !isValidStreamState(candidate) || !newer || isIgnored(candidate.actor, "streamLinks")) return;
+							streamState = cloneStreamState(candidate);
+							if (publisherStreamId && publisherStreamId !== streamState.stream?.id) closePublisher();
+							render();
+						},
+						onNavigate: payload => {
+							if (generation !== connectionGeneration || isIgnored(payload?.actor, "streamLinks")) return;
+							const url = validateHttpUrl(payload?.url);
+							if (!url) return;
+							pendingUrl = url;
+							pendingLinkActor = payload.actor;
+							receivedLink.textContent = url;
+							if (!linkDialog.open) linkDialog.showModal();
+						},
+						onChat: message => {
+							if (generation !== connectionGeneration || isIgnored(message?.actor, "chatSharepad") || !USER_ID_PATTERN.test(message?.actor?.userId || "") || typeof message.actor?.name !== "string" || (message.actor?.mode !== "Web" && message.actor?.mode !== "VR") || typeof message?.text !== "string" || !Number.isSafeInteger(message?.timestamp)) return;
+							if (message.actor.name.length > 40 || !message.text.trim() || message.text.length > CHAT_MESSAGE_MAX_LENGTH) return;
+							if (message.actor.userId !== currentActor().userId) {
+								participants.set(message.actor.userId, {...message.actor, peerId: participants.get(message.actor.userId)?.peerId || ""});
+								renderParticipants();
+							}
+							appendChatMessage(message);
+						},
+						onActivity: activity => {
+							if (generation !== connectionGeneration || !isValidActivity(activity) || isIgnored(activity.actor, "streamLinks")) return;
+							appendChatEvent(activityText(activity), activity.timestamp);
+						},
+						onProfile: (actor, peerId) => {
+							if (generation !== connectionGeneration || !isValidActor(actor) || actor.userId === currentActor().userId) return;
+							const isNewUser = !participants.has(actor.userId);
+							participants.set(actor.userId, {...actor, peerId});
+							renderParticipants();
+							if (isNewUser && !isIgnored(actor, "chatSharepad")) appendChatEvent((actor.name || "Anonymous") + " joined.");
+						},
+						onPeerJoin: () => {
+							if (generation === connectionGeneration && roomReady) connection?.sendProfile(currentActor());
+						},
+						onPeerLeave: peerId => {
+							if (generation !== connectionGeneration) return;
+							for (const [userId, actor] of participants) {
+								if (actor.peerId !== peerId) continue;
+								participants.delete(userId);
+								if (!isIgnored(actor, "chatSharepad")) appendChatEvent((actor.name || "Anonymous") + " left.");
+							}
+							renderParticipants();
+						},
+						onPresence: count => {
+							if (generation !== connectionGeneration) return;
+							peerCount = count;
+							render();
+						},
+						onError: error => {
+							if (generation === connectionGeneration) setNotice("Peer connection failed: " + (error instanceof Error ? error.message : String(error)), true);
+						}
+					});
+					render();
+				} catch (error) {
+					setNotice("Connection failed: " + (error instanceof Error ? error.message : String(error)), true, true);
+				}
+			}
+
+			roomForm.addEventListener("submit", event => {
+				event.preventDefault();
+				joinRoom(roomInput.value, true);
+			});
+
+			leaveButton.addEventListener("click", () => leaveRoom(true));
+
+			sharepad.addEventListener("input", () => {
+				if (!communityAccessAccepted) return;
+				updatePadState(sharepad.value);
+				clearTimeout(padSendTimer);
+				padSendTimer = setTimeout(() => {
+					connection?.sendPad(clonePadState(padState)).catch(error => setNotice("Sharepad update failed: " + (error instanceof Error ? error.message : String(error)), true));
+				}, PAD_DEBOUNCE_MS);
+			});
+
+			function openAndMaybeSendUrl(url, quickLinkLabel = "") {
+				if (!openUrl(url)) return setNotice("Opening the link was blocked.", true);
+				announceActivity(quickLinkLabel ? "quicklink" : "website", quickLinkLabel);
+				if (sendLinkCheckbox.checked) {
+					connection?.sendNavigate({url, actor: currentActor()}).then(() => setNotice("Link opened and sent.")).catch(error => setNotice("Link send failed: " + (error instanceof Error ? error.message : String(error)), true));
+				}
+			}
+
+			function submitAddress() {
+				const url = normalizeHttpUrl(addressInput.value);
+				if (!url) return setNotice("Enter a valid HTTP or HTTPS URL.", true);
+				if (isReceiver) {
+					openAndMaybeSendUrl(url);
+				} else {
+					connection?.sendNavigate({url, actor: currentActor()}).then(() => setNotice("Link sent.")).catch(error => setNotice("Link send failed: " + (error instanceof Error ? error.message : String(error)), true));
+				}
+				addressInput.value = "";
+			}
+
+			addressForm.addEventListener("submit", event => {
+				event.preventDefault();
+				submitAddress();
+			});
+
+			openAddressButton.addEventListener("click", () => {
+				submitAddress();
+			});
+
+			communityAccessForm.addEventListener("submit", event => {
+				event.preventDefault();
+				const name = communityNicknameInput.value.trim();
+				if (!name || name === chatProfile?.name) return grantCommunityAccess();
+				if (chatProfile && chatProfile.changedAt + CHAT_NAME_CHANGE_DELAY_MS > Date.now()) {
+					communityAccessStatus.textContent = "The saved nickname cannot be changed yet. Accept with the current nickname or leave this field unchanged.";
+					communityAccessStatus.hidden = false;
+					return;
+				}
+				pendingCommunityAcceptance = true;
+				pendingChatProfile = {userId: getUserId(), name, changedAt: Date.now()};
+				nameConfirmText.textContent = name;
+				nameConfirmDialog.showModal();
+			});
+
+			declineCommunityAccess.addEventListener("click", () => {
+				communityAccessStatus.textContent = "Declined. Chat and Sharepad remain unavailable.";
+				communityAccessStatus.hidden = false;
+			});
+
+			chatIdentityForm.addEventListener("submit", event => {
+				event.preventDefault();
+				const name = chatNameInput.value.trim();
+				if (!name) return setNotice("Chat name is required.", true);
+				if (chatProfile?.name === name) return setNotice("Enter a different chat name.", true);
+				if (chatProfile && chatProfile.changedAt + CHAT_NAME_CHANGE_DELAY_MS > Date.now()) return;
+				pendingChatProfile = {userId: getUserId(), name, changedAt: Date.now()};
+				nameConfirmText.textContent = name;
+				nameConfirmDialog.showModal();
+			});
+
+			confirmName.addEventListener("click", () => {
+				if (!pendingChatProfile) return;
+				try { localStorage.setItem(CHAT_PROFILE_KEY, JSON.stringify(pendingChatProfile)); } catch { return setNotice("Chat name could not be saved.", true); }
+				const acceptAfterSave = pendingCommunityAcceptance;
+				chatProfile = pendingChatProfile;
+				pendingChatProfile = null;
+				pendingCommunityAcceptance = false;
+				if (roomReady) {
+					const actor = currentActor();
+					participants.set(actor.userId, {...actor, peerId: selfId});
+					renderParticipants();
+					connection?.sendProfile(actor);
+				}
+				chatNameInput.value = chatProfile.name;
+				nameConfirmDialog.close();
+				if (acceptAfterSave) grantCommunityAccess();
+				else renderChatIdentity();
+			});
+
+			cancelName.addEventListener("click", () => {
+				pendingChatProfile = null;
+				pendingCommunityAcceptance = false;
+				nameConfirmDialog.close();
+			});
+
+			chatForm.addEventListener("submit", event => {
+				event.preventDefault();
+				const text = chatInput.value.trim();
+				if (!text) return;
+				sendChatMessage(text);
+			});
+
+			chatInput.addEventListener("keydown", event => {
+				if (event.key !== "Enter" || event.isComposing) return;
+				event.preventDefault();
+				chatForm.requestSubmit();
+			});
+
+			ignoreLink.addEventListener("click", () => { pendingUrl = ""; });
+
+			ignoreLinkUser.addEventListener("click", () => {
+				if (pendingLinkActor?.userId) {
+					userRules[pendingLinkActor.userId] = {...userRules[pendingLinkActor.userId], name: pendingLinkActor.name || "Anonymous", streamLinks: true};
+					saveUserRules();
+				}
+				pendingUrl = "";
+				linkDialog.close();
+			});
+
+			document.addEventListener("pointerdown", event => {
+				if (!userMenu.hidden && !userMenu.contains(event.target)) closeUserMenu();
+			});
+			document.addEventListener("keydown", event => {
+				if (event.key === "Escape") closeUserMenu();
+			});
+			window.addEventListener("blur", closeUserMenu);
+			window.addEventListener("resize", closeUserMenu);
+			document.addEventListener("scroll", closeUserMenu, true);
+
+			manageRulesButton.addEventListener("click", () => {
+				rulesDialog.replaceChildren();
+				const entries = Object.entries(userRules);
+				if (!entries.length) rulesDialog.textContent = "No ignored users.";
+				for (const [userId, rule] of entries) {
+					const button = document.createElement("button");
+					button.type = "button";
+					button.textContent = (rule.name || "Anonymous") + " · " + userId.slice(0, 8);
+					button.addEventListener("click", () => {
+						rulesDialog.close();
+						openUserMenu({userId, name: rule.name || "Anonymous", mode: ""}, undefined, undefined, manageRulesButton);
+					});
+					rulesDialog.appendChild(button);
+				}
+				const close = document.createElement("button");
+				close.type = "button";
+				close.textContent = "Close";
+				close.addEventListener("click", () => rulesDialog.close());
+				rulesDialog.appendChild(close);
+				rulesDialog.showModal();
+			});
+
+			openLink.addEventListener("click", event => {
+				event.preventDefault();
+				if (!pendingUrl || !openUrl(pendingUrl)) return setNotice("Opening the link was blocked.", true);
+				announceActivity("website");
+				pendingUrl = "";
+				linkDialog.close();
+			});
+
+			startStream.addEventListener("click", () => {
+				if (!connection || streamState.mode === "stream") return;
+				const popup = window.open("about:blank", "_blank");
+				if (!popup) return setNotice("VDO.Ninja popup was blocked.", true);
+				const streamId = [...crypto.getRandomValues(new Uint8Array(16))].map(value => value.toString(16).padStart(2, "0")).join("");
+				const state = updateStreamState("stream", {id: streamId});
+				publisherWindow = popup;
+				publisherStreamId = streamId;
+				connection.sendStream(state).then(() => {
+					const publisherUrl = new URL(VDO_BASE_URL);
+					publisherUrl.searchParams.set("push", streamId);
+					publisherUrl.searchParams.set("screenshare", "");
+					popup.location.replace(publisherUrl.href);
+					publisherMonitor = setInterval(() => {
+						if (publisherWindow?.closed && publisherStreamId === streamId && streamState.stream?.id === streamId) stopStream.click();
+					}, 1000);
+				}).catch(error => {
+					closePublisher();
+					connection?.sendStream(updateStreamState("home", null));
+					setNotice("Stream start failed: " + (error instanceof Error ? error.message : String(error)), true);
+				});
+			});
+
+			stopStream.addEventListener("click", () => {
+				if (!connection || streamState.mode !== "stream") return;
+				const state = updateStreamState("home", null);
+				closePublisher();
+				connection.sendStream(state).catch(error => setNotice("Stream stop failed: " + (error instanceof Error ? error.message : String(error)), true));
+			});
+
+			window.addEventListener("beforeunload", () => {
+				connection?.leave();
+				clearTimeout(padSendTimer);
+				clearInterval(publisherMonitor);
+			});
+
+			readChatProfile();
+			readCommunityAccess();
+			try { userRules = JSON.parse(localStorage.getItem(USER_RULES_KEY) || "{}") || {}; } catch { userRules = {}; }
+			renderChatIdentity();
+			render();
+			if (roomFromUrl) joinRoom(currentRoomId);
+		</script>
+	</body>
+</html>
