@@ -119,8 +119,9 @@ SOFTWARE.
 				.room-workspace { display: grid !important; grid-template-columns: 11rem minmax(0,1fr); align-items: start; }
 				.room-workspace[hidden] { display: none !important; }
 				.room-workspace.solo { grid-template-columns: minmax(0,1fr); }
-				.room-main { display: grid; grid-template-columns: minmax(14rem,5fr) minmax(20rem,7fr); gap: .75rem; min-width: 0; }
+				.room-main { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; min-width: 0; }
 				.room-main > .full-width { grid-column: 1 / -1; }
+				.controller-access-url { white-space: nowrap; overflow-x: auto; }
 				.youtube-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 				.participant-row { display: grid; grid-template-columns: .5rem minmax(0,1fr); gap: .4rem; width: 100%; padding: .4rem .1rem; border: 0; border-bottom: 1px solid ${colors.line}; border-radius: 0; color: ${colors.text}; background: transparent; font-size: .9rem; text-align: left; cursor: pointer; }
 				.participant-row:hover, .participant-row:focus-visible { background: ${colors.panel}; }
@@ -132,13 +133,23 @@ SOFTWARE.
 				.mode-web { border-color: #327a59; color: #7ce6ae; background: #123b2c; }
 				.mode-vr { border-color: #6755a0; color: #d5c8ff; background: #302657; }
 				.user-context-menu[hidden] { display: none !important; }
-				.chat-message { display: grid; grid-template-columns: minmax(5.5rem,8rem) minmax(0,1fr); align-items: start; gap: .5rem; }
-				.chat-event { padding-left: 8.5rem; color: ${colors.muted}; font-size: .75rem; }
+				.chat-message { display: grid; grid-template-columns: minmax(3.75rem,5.5rem) minmax(0,1fr); align-items: start; gap: .3rem; font-size: .8rem; }
+				.chat-sender { padding: .2rem 0; overflow: hidden; border: 0; color: ${colors.label}; background: transparent; font-size: .72rem; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+				.chat-message-box { overflow: hidden; border: 1px solid ${colors.line}; border-radius: .4rem; background: ${colors.panelSoft}; }
+				.chat-message-line { padding: .2rem .35rem; line-height: 1.3; overflow-wrap: anywhere; }
+				.chat-message-line + .chat-message-line { border-top: 1px solid ${colors.line}; }
+				.chat-event { padding-left: 5.8rem; color: ${colors.muted}; font-size: .68rem; }
 				@media (max-width: 800px) {
 					.connection-bar { flex-wrap: wrap !important; }
 					.room-workspace { grid-template-columns: 1fr; }
 					.room-main { grid-template-columns: 1fr; }
 					.room-main > * { grid-column: 1; }
+					.room-main .room-controls { order: 1; }
+					.room-main .chat-panel { order: 2; }
+					.room-main .navigation-panel { order: 3; }
+					.room-main .community-access-panel { order: 4; }
+					.room-main .sharepad-panel { order: 5; }
+					.controller-access-url { white-space: normal; overflow-wrap: anywhere; }
 					.chat-event { padding-left: 0; }
 				}
 				@media (max-width: 560px) {
@@ -280,39 +291,43 @@ SOFTWARE.
 			const controllerAccessPanel = document.createElement("section");
 			controllerAccessPanel.hidden = !isReceiver;
 			controllerAccessPanel.style.display = isReceiver ? "grid" : "none";
-			controllerAccessPanel.style.gap = ".45rem";
+			controllerAccessPanel.style.gap = ".3rem";
 			controllerAccessPanel.style.marginTop = "0";
-			controllerAccessPanel.style.padding = ".55rem";
+			controllerAccessPanel.style.padding = ".4rem";
 			controllerAccessPanel.style.border = "1px solid " + colors.accent;
-			controllerAccessPanel.style.borderRadius = ".8rem";
+			controllerAccessPanel.style.borderRadius = ".65rem";
 			controllerAccessPanel.style.background = colors.panel;
 			app.appendChild(controllerAccessPanel);
+
+			const controllerAccessHeader = document.createElement("div");
+			controllerAccessHeader.style.display = "flex";
+			controllerAccessHeader.style.alignItems = "baseline";
+			controllerAccessHeader.style.justifyContent = "space-between";
+			controllerAccessHeader.style.gap = ".75rem";
+			controllerAccessPanel.appendChild(controllerAccessHeader);
 
 			const controllerAccessTitle = document.createElement("h2");
 			controllerAccessTitle.textContent = "Control from another device";
 			controllerAccessTitle.style.margin = "0";
-			controllerAccessPanel.appendChild(controllerAccessTitle);
+			controllerAccessTitle.style.fontSize = "1rem";
 
-			const controllerAccessHint = document.createElement("p");
-			controllerAccessHint.textContent = "Open this address on a PC, phone, or tablet:";
-			controllerAccessHint.style.margin = "0";
-			controllerAccessHint.style.color = colors.label;
-			controllerAccessHint.style.fontSize = ".9rem";
-			controllerAccessPanel.appendChild(controllerAccessHint);
+			const controllerAccessRoom = document.createElement("strong");
+			controllerAccessRoom.style.color = colors.muted;
+			controllerAccessRoom.style.fontSize = ".8rem";
+			controllerAccessRoom.style.whiteSpace = "nowrap";
+			controllerAccessHeader.append(controllerAccessTitle, controllerAccessRoom);
 
 			const controllerAccessUrl = document.createElement("output");
+			controllerAccessUrl.className = "controller-access-url";
 			controllerAccessUrl.style.display = "block";
-			controllerAccessUrl.style.padding = ".55rem";
-			controllerAccessUrl.style.borderRadius = ".55rem";
+			controllerAccessUrl.style.padding = ".3rem .45rem";
+			controllerAccessUrl.style.borderRadius = ".45rem";
 			controllerAccessUrl.style.color = colors.accentStrong;
 			controllerAccessUrl.style.background = colors.backgroundSoft;
 			controllerAccessUrl.style.fontFamily = "ui-monospace,monospace";
-			controllerAccessUrl.style.lineHeight = "1.5";
-			controllerAccessUrl.style.overflowWrap = "anywhere";
+			controllerAccessUrl.style.fontSize = ".8rem";
+			controllerAccessUrl.style.lineHeight = "1.35";
 			controllerAccessPanel.appendChild(controllerAccessUrl);
-
-			const controllerAccessRoom = document.createElement("strong");
-			controllerAccessPanel.appendChild(controllerAccessRoom);
 
 			const notice = document.createElement("small");
 			notice.style.flexBasis = "18rem";
@@ -327,11 +342,12 @@ SOFTWARE.
 			content.hidden = true;
 			content.style.display = "grid";
 			content.style.alignItems = "start";
-			content.style.gap = ".75rem";
-			content.style.marginTop = ".75rem";
+			content.style.gap = ".5rem";
+			content.style.marginTop = ".5rem";
 			app.appendChild(content);
 
 			const sharepadPanel = document.createElement("section");
+			sharepadPanel.className = "sharepad-panel";
 			sharepadPanel.style.minWidth = "0";
 			sharepadPanel.style.display = "grid";
 			sharepadPanel.style.gridTemplateRows = "auto minmax(7rem,1fr) auto";
@@ -403,6 +419,7 @@ SOFTWARE.
 			streamPanel.appendChild(streamFrame);
 
 			const navigationPanel = document.createElement("section");
+			navigationPanel.className = "navigation-panel";
 			navigationPanel.style.display = "grid";
 			navigationPanel.style.gap = ".75rem";
 			navigationPanel.style.flex = "1 1 30rem";
@@ -420,7 +437,8 @@ SOFTWARE.
 			addressLabel.textContent = isReceiver ? "Open a website" : "Send a website link";
 			addressLabel.style.color = colors.label;
 			addressLabel.style.fontSize = ".9rem";
-			addressForm.appendChild(addressLabel);
+			addressLabel.style.fontWeight = "600";
+			addressLabel.style.whiteSpace = "nowrap";
 
 			const addressRow = document.createElement("div");
 			addressRow.style.display = "flex";
@@ -428,6 +446,7 @@ SOFTWARE.
 			addressRow.style.alignItems = "center";
 			addressRow.style.gap = ".5rem";
 			addressForm.appendChild(addressRow);
+			addressRow.appendChild(addressLabel);
 
 			const addressInput = document.createElement("input");
 			addressInput.type = "text";
@@ -476,14 +495,23 @@ SOFTWARE.
 			sendLinkToggle.append(sendLinkCheckbox, document.createTextNode("Also send link"));
 			addressActions.appendChild(sendLinkToggle);
 
-			const quickLinksTitle = document.createElement("h2");
-			quickLinksTitle.textContent = "Quick links";
-			quickLinksTitle.style.margin = "0";
+			const quickLinksPanel = document.createElement("details");
+			quickLinksPanel.hidden = !isReceiver;
+			quickLinksPanel.style.paddingTop = ".1rem";
+
+			const quickLinksSummary = document.createElement("summary");
+			quickLinksSummary.textContent = "Quick links";
+			quickLinksSummary.style.color = colors.label;
+			quickLinksSummary.style.fontSize = ".9rem";
+			quickLinksSummary.style.fontWeight = "700";
+			quickLinksSummary.style.cursor = "pointer";
+			quickLinksPanel.appendChild(quickLinksSummary);
 
 			const quickLinks = document.createElement("div");
 			quickLinks.style.display = isReceiver ? "flex" : "none";
 			quickLinks.style.flexWrap = "wrap";
 			quickLinks.style.gap = ".5rem";
+			quickLinks.style.marginTop = ".5rem";
 			for (const [label, url] of WEBSITE_PRESETS) {
 				const button = document.createElement("button");
 				button.type = "button";
@@ -500,14 +528,16 @@ SOFTWARE.
 				});
 				quickLinks.appendChild(button);
 			}
-			quickLinksTitle.hidden = !isReceiver;
-			quickLinks.hidden = !isReceiver;
-			addressForm.append(quickLinksTitle, quickLinks);
+			quickLinksPanel.appendChild(quickLinks);
+			addressForm.appendChild(quickLinksPanel);
 
 			const chatPanel = document.createElement("section");
+			chatPanel.className = "chat-panel";
 			chatPanel.style.display = "grid";
-			chatPanel.style.gap = ".4rem";
-			chatPanel.style.padding = ".5rem";
+			chatPanel.style.gridTemplateRows = "auto minmax(12rem,1fr) auto";
+			chatPanel.style.alignSelf = "stretch";
+			chatPanel.style.gap = ".3rem";
+			chatPanel.style.padding = ".4rem";
 			chatPanel.style.border = "1px solid " + colors.line;
 			chatPanel.style.borderRadius = ".65rem";
 			chatPanel.style.background = colors.panel;
@@ -516,9 +546,11 @@ SOFTWARE.
 			const chatTitle = document.createElement("h2");
 			chatTitle.textContent = "Room chat";
 			chatTitle.style.margin = "0";
+			chatTitle.style.fontSize = ".95rem";
 			chatPanel.appendChild(chatTitle);
 
 			const communityAccessPanel = document.createElement("section");
+			communityAccessPanel.className = "community-access-panel";
 			communityAccessPanel.style.display = "grid";
 			communityAccessPanel.style.gap = ".55rem";
 			communityAccessPanel.style.padding = ".75rem";
@@ -693,9 +725,10 @@ SOFTWARE.
 			chatLog.setAttribute("aria-live", "polite");
 			chatLog.style.display = "grid";
 			chatLog.style.alignContent = "start";
-			chatLog.style.gap = ".4rem";
-			chatLog.style.height = "12rem";
-			chatLog.style.padding = ".4rem";
+			chatLog.style.gap = ".25rem";
+			chatLog.style.height = "100%";
+			chatLog.style.minHeight = "12rem";
+			chatLog.style.padding = ".25rem";
 			chatLog.style.overflowY = "auto";
 			chatLog.style.border = "1px solid " + colors.line;
 			chatLog.style.borderRadius = ".55rem";
@@ -715,30 +748,33 @@ SOFTWARE.
 			chatInput.placeholder = "Write a message";
 			chatInput.autocomplete = "off";
 			chatInput.style.minWidth = "12rem";
-			chatInput.style.height = "2rem";
+			chatInput.style.height = "1.75rem";
 			chatInput.style.flex = "1";
-			chatInput.style.padding = ".4rem .65rem";
+			chatInput.style.padding = ".25rem .45rem";
 			chatInput.style.border = "1px solid " + colors.line;
 			chatInput.style.borderRadius = ".55rem";
 			chatInput.style.boxSizing = "border-box";
 			chatInput.style.color = colors.text;
 			chatInput.style.background = colors.backgroundSoft;
+			chatInput.style.fontSize = ".8rem";
 			chatForm.appendChild(chatInput);
 
 			const sendChatButton = document.createElement("button");
 			sendChatButton.type = "submit";
 			sendChatButton.textContent = "Send";
-			sendChatButton.style.height = "2rem";
-			sendChatButton.style.padding = ".4rem .7rem";
+			sendChatButton.style.height = "1.75rem";
+			sendChatButton.style.padding = ".25rem .55rem";
 			sendChatButton.style.border = "0";
 			sendChatButton.style.borderRadius = ".55rem";
 			sendChatButton.style.color = colors.background;
 			sendChatButton.style.background = colors.accent;
+			sendChatButton.style.fontSize = ".8rem";
 			sendChatButton.style.fontWeight = "700";
 			sendChatButton.style.cursor = "pointer";
 			chatForm.appendChild(sendChatButton);
 
 			const controls = document.createElement("section");
+			controls.className = "room-controls";
 			controls.hidden = true;
 			controls.style.display = "none";
 			controls.style.gap = ".75rem";
@@ -791,8 +827,8 @@ SOFTWARE.
 			youtubeInput.type = "text";
 			youtubeInput.id = "youtube-url";
 			youtubeInput.name = "youtube-url";
-			youtubeInput.ariaLabel = "YouTube URL or search terms";
-			youtubeInput.placeholder = "YouTube URL or search terms";
+			youtubeInput.ariaLabel = "YouTube video or playlist URL";
+			youtubeInput.placeholder = "YouTube video or playlist URL";
 			youtubeInput.autocomplete = "off";
 			youtubeInput.spellcheck = false;
 			youtubeInput.style.minWidth = "12rem";
@@ -808,7 +844,7 @@ SOFTWARE.
 
 			const youtubeLoadButton = document.createElement("button");
 			youtubeLoadButton.type = "submit";
-			youtubeLoadButton.textContent = "Load / Search";
+			youtubeLoadButton.textContent = "Load";
 			youtubeLoadButton.style.height = "2rem";
 			youtubeLoadButton.style.padding = ".4rem .7rem";
 			youtubeLoadButton.style.border = "0";
@@ -957,8 +993,8 @@ SOFTWARE.
 			controllerAccessPanel.classList.add("full-width");
 			navigationPanel.classList.add("full-width");
 			communityAccessPanel.classList.add("full-width");
-			chatPanel.classList.add("full-width");
-			roomMain.append(streamPanel, controllerAccessPanel, navigationPanel, communityAccessPanel, chatPanel, sharepadPanel, controls);
+			sharepadPanel.classList.add("full-width");
+			roomMain.append(streamPanel, controllerAccessPanel, chatPanel, controls, navigationPanel, communityAccessPanel, sharepadPanel);
 
 			const linkDialog = document.createElement("dialog");
 			linkDialog.style.width = "min(32rem,calc(100% - 2rem))";
@@ -1366,34 +1402,30 @@ SOFTWARE.
 			}
 
 			function appendChatMessage(message) {
-				const item = document.createElement("article");
-				item.className = "chat-message";
-				const sender = document.createElement("button");
-				sender.type = "button";
 				const timestamp = new Date(message.timestamp).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
-				sender.textContent = message.actor.name || "Anonymous";
-				sender.title = message.actor.userId.slice(0, 8) + " · " + message.actor.mode;
-				sender.style.padding = ".35rem 0";
-				sender.style.overflow = "hidden";
-				sender.style.border = "0";
-				sender.style.color = colors.label;
-				sender.style.background = "transparent";
-				sender.style.fontWeight = "700";
-				sender.style.textAlign = "left";
-				sender.style.textOverflow = "ellipsis";
-				sender.style.whiteSpace = "nowrap";
-				sender.style.cursor = "pointer";
-				bindUserMenu(sender, message.actor);
 				const text = document.createElement("div");
+				text.className = "chat-message-line";
 				text.textContent = message.text;
 				text.title = timestamp;
-				text.style.padding = ".35rem .5rem";
-				text.style.border = "1px solid " + colors.line;
-				text.style.borderRadius = ".5rem";
-				text.style.background = colors.panelSoft;
-				text.style.overflowWrap = "anywhere";
-				item.append(sender, text);
-				chatLog.appendChild(item);
+				const previous = chatLog.lastElementChild;
+				if (previous?.classList.contains("chat-message") && previous.dataset.userId === message.actor.userId) {
+					previous.querySelector(".chat-message-box")?.appendChild(text);
+				} else {
+					const item = document.createElement("article");
+					item.className = "chat-message";
+					item.dataset.userId = message.actor.userId;
+					const sender = document.createElement("button");
+					sender.type = "button";
+					sender.className = "chat-sender";
+					sender.textContent = message.actor.name || "Anonymous";
+					sender.title = message.actor.userId.slice(0, 8) + " · " + message.actor.mode;
+					bindUserMenu(sender, message.actor);
+					const box = document.createElement("div");
+					box.className = "chat-message-box";
+					box.appendChild(text);
+					item.append(sender, box);
+					chatLog.appendChild(item);
+				}
 				chatLog.scrollTop = chatLog.scrollHeight;
 			}
 
@@ -2223,17 +2255,9 @@ SOFTWARE.
 			youtubeForm.addEventListener("submit", event => {
 				event.preventDefault();
 				const value = youtubeInput.value.trim();
-				if (!value) return setNotice("Enter a YouTube URL or search terms.", true);
+				if (!value) return setNotice("Enter a YouTube video or playlist URL.", true);
 				const content = parseYoutubeUrl(value);
-				if (!content) {
-					const searchUrl = new URL("https://www.youtube.com/results");
-					searchUrl.searchParams.set("search_query", value);
-					const popup = window.open("about:blank", "_blank", "popup=yes,width=960,height=720,resizable=yes,scrollbars=yes");
-					if (!popup) return setNotice("YouTube search popup was blocked.", true);
-					popup.opener = null;
-					popup.location.replace(searchUrl.href);
-					return;
-				}
+				if (!content) return setNotice("Enter a valid YouTube video or playlist URL.", true);
 				const playback = {status: "playing", position: 0, rate: 1};
 				applyYoutubeSnapshot(content, playback);
 				if (!submitYoutubeSnapshot({content, playback})) {
