@@ -29,7 +29,7 @@ Serve the repository through HTTPS or a local development origin and open `index
 
 Receiver mode provides an address bar that opens HTTP(S) websites locally and, when the shared "Also send link" option is enabled, sends them to the other room participants. It additionally provides local quick links that use the same option. Controller mode provides an address bar that only sends HTTP(S) links, and can edit the Sharepad, start a VDO.Ninja screen share, and stop the active stream. Receiver mode displays the active VDO.Ninja stream. Received links always require confirmation unless their sender is locally ignored.
 
-Both modes provide a synchronized YouTube player for videos and playlists. Rooms start without a master, so play, pause, seek, playlist, and playback-rate changes from any synchronized participant become the shared state. A participant can take over as master and optionally lock further takeovers. A follower who changes shared playback controls locally leaves synchronization until selecting `Not sync` to follow the room again. Volume, captions, and playback quality always remain local. If a master leaves, the room returns to shared control without forcing locally detached participants back into synchronization.
+Both modes provide a synchronized YouTube player for videos and playlists. Rooms start without a controller, so play, pause, seek, playlist, and playback-rate changes from any synchronized participant become the shared state. A participant can take control, optionally allow shared control, and independently lock further takeovers. The controller can release control or give it to another connected participant from the user menu. Selecting `Sync` deliberately switches to local playback; selecting `Not sync` follows the current room state again. A controller who switches to local playback releases control first. A participant who changes playback while exclusive control is active also leaves synchronization. A controller's local `Ignore YouTube control` rule rejects that user's shared playback requests and takeovers. Volume, captions, and playback quality always remain local. If a controller leaves, the room returns to shared control without forcing locally detached participants back into synchronization. The YouTube field also accepts search terms and attempts to open the full YouTube results page in a separate local popup. Popup playback is never synchronized; a selected URL must be copied back into the Hub to load it there.
 
 Both modes include a room chat and Sharepad behind a shared community disclaimer. Accepting the basic rules enables both features; the optional nickname may be left empty to participate as `Anonymous`. A saved nickname can be changed after 48 hours. Declining leaves Chat and Sharepad unavailable. The chat also shows transient join, leave, website, quick-link, and stream activity. Custom website URLs are not included in activity messages. Chat history is not synchronized with later room joins and is cleared when leaving or reloading.
 
@@ -37,7 +37,7 @@ Both modes include a room chat and Sharepad behind a shared community disclaimer
 
 The community-disclaimer acceptance, local chat profile (stable user ID, optional name, and last-change timestamp), and per-user ignore rules are stored in `localStorage`. Room state, Sharepad content, YouTube playback and roles, stream IDs, chat messages, and peer information are not persisted.
 
-Ignore rules are local to the browser and use the stable user ID rather than the changeable display name. They apply independently to chat plus Sharepad, and to links plus streams.
+Ignore rules are local to the browser and use the stable user ID rather than the changeable display name. They apply independently to chat plus Sharepad, links plus streams, and YouTube control. The YouTube rule affects the room only while its owner is the controller.
 
 The user list marks Web and VR sessions with distinct badges. Clicking or right-clicking a user in the list or chat opens the same local rule menu.
 
@@ -48,5 +48,5 @@ The user list marks Web and VR sessions with distinct badges. Clicking or right-
 - Received text is rendered through DOM text properties.
 - Chat message length is limited to 1,000 characters.
 - Stream IDs use 128 bits of randomness.
-- YouTube master locking is cooperative room behavior, not an access-control boundary.
+- YouTube control, takeover locking, and ignore rules are cooperative room behavior, not an access-control boundary.
 - The default room ID is public and is not an access-control mechanism.

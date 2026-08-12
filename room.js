@@ -126,7 +126,7 @@ export function createRoomConnection(roomId, handlers) {
 		sendChat: message => chatAction.send(message),
 		sendActivity: activity => activityAction.send(activity),
 		sendProfile: profile => profileAction.send(profile),
-		sendYouTube: message => youtubeAction.send(message),
+		sendYouTube: (message, targets) => targets ? youtubeAction.send(message, targets) : youtubeAction.send(message),
 		getPeerIds: () => Object.keys(room.getPeers()),
 		leave() {
 			active = false;

@@ -85,6 +85,7 @@ SOFTWARE.
 				label: "#c5dce8",
 				accent: "#29b6f6",
 				accentStrong: "#58d0ff",
+				success: "#5cca8f",
 				warning: "#f0c94a",
 				danger: "#ff6b72"
 			};
@@ -118,7 +119,7 @@ SOFTWARE.
 				.room-workspace { display: grid !important; grid-template-columns: 11rem minmax(0,1fr); align-items: start; }
 				.room-workspace[hidden] { display: none !important; }
 				.room-workspace.solo { grid-template-columns: minmax(0,1fr); }
-				.room-main { display: grid; grid-template-columns: minmax(0,2fr) minmax(20rem,1fr); gap: .75rem; min-width: 0; }
+				.room-main { display: grid; grid-template-columns: minmax(14rem,5fr) minmax(20rem,7fr); gap: .75rem; min-width: 0; }
 				.room-main > .full-width { grid-column: 1 / -1; }
 				.youtube-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 				.participant-row { display: grid; grid-template-columns: .5rem minmax(0,1fr); gap: .4rem; width: 100%; padding: .4rem .1rem; border: 0; border-bottom: 1px solid ${colors.line}; border-radius: 0; color: ${colors.text}; background: transparent; font-size: .9rem; text-align: left; cursor: pointer; }
@@ -331,8 +332,10 @@ SOFTWARE.
 			app.appendChild(content);
 
 			const sharepadPanel = document.createElement("section");
-			sharepadPanel.style.minWidth = "min(100%,30rem)";
-			sharepadPanel.style.flex = "1 1 38rem";
+			sharepadPanel.style.minWidth = "0";
+			sharepadPanel.style.display = "grid";
+			sharepadPanel.style.gridTemplateRows = "auto minmax(7rem,1fr) auto";
+			sharepadPanel.style.alignSelf = "stretch";
 			sharepadPanel.style.padding = ".5rem";
 			sharepadPanel.style.border = "1px solid " + colors.line;
 			sharepadPanel.style.borderRadius = ".65rem";
@@ -349,6 +352,7 @@ SOFTWARE.
 			sharepad.rows = 4;
 			sharepad.placeholder = "Write shared notes and links here.";
 			sharepad.style.width = "100%";
+			sharepad.style.height = "100%";
 			sharepad.style.minHeight = "7rem";
 			sharepad.style.padding = ".45rem";
 			sharepad.style.border = "1px solid " + colors.line;
@@ -763,11 +767,19 @@ SOFTWARE.
 			youtubeTitle.textContent = "YouTube";
 			youtubeTitle.style.margin = "0";
 
+			const youtubeHeaderControls = document.createElement("div");
+			youtubeHeaderControls.style.display = "flex";
+			youtubeHeaderControls.style.flexWrap = "wrap";
+			youtubeHeaderControls.style.justifyContent = "flex-end";
+			youtubeHeaderControls.style.alignItems = "center";
+			youtubeHeaderControls.style.gap = ".35rem";
+
 			const youtubeRoleStatus = document.createElement("strong");
-			youtubeRoleStatus.textContent = "No master";
+			youtubeRoleStatus.textContent = "No controller";
 			youtubeRoleStatus.style.color = colors.label;
 			youtubeRoleStatus.style.fontSize = ".8rem";
-			youtubeHeader.append(youtubeTitle, youtubeRoleStatus);
+			youtubeHeaderControls.appendChild(youtubeRoleStatus);
+			youtubeHeader.append(youtubeTitle, youtubeHeaderControls);
 
 			const youtubeForm = document.createElement("form");
 			youtubeForm.style.display = "flex";
@@ -776,11 +788,11 @@ SOFTWARE.
 			youtubePanel.appendChild(youtubeForm);
 
 			const youtubeInput = document.createElement("input");
-			youtubeInput.type = "url";
+			youtubeInput.type = "text";
 			youtubeInput.id = "youtube-url";
 			youtubeInput.name = "youtube-url";
-			youtubeInput.ariaLabel = "YouTube video or playlist URL";
-			youtubeInput.placeholder = "YouTube video or playlist URL";
+			youtubeInput.ariaLabel = "YouTube URL or search terms";
+			youtubeInput.placeholder = "YouTube URL or search terms";
 			youtubeInput.autocomplete = "off";
 			youtubeInput.spellcheck = false;
 			youtubeInput.style.minWidth = "12rem";
@@ -796,7 +808,7 @@ SOFTWARE.
 
 			const youtubeLoadButton = document.createElement("button");
 			youtubeLoadButton.type = "submit";
-			youtubeLoadButton.textContent = "Load";
+			youtubeLoadButton.textContent = "Load / Search";
 			youtubeLoadButton.style.height = "2rem";
 			youtubeLoadButton.style.padding = ".4rem .7rem";
 			youtubeLoadButton.style.border = "0";
@@ -835,30 +847,45 @@ SOFTWARE.
 			youtubeSyncButton.disabled = true;
 			youtubeSyncButton.style.height = "2rem";
 			youtubeSyncButton.style.padding = ".4rem .7rem";
-			youtubeSyncButton.style.border = "1px solid " + colors.accent;
+			youtubeSyncButton.style.border = "1px solid " + colors.success;
 			youtubeSyncButton.style.borderRadius = ".55rem";
-			youtubeSyncButton.style.color = colors.text;
+			youtubeSyncButton.style.color = colors.success;
 			youtubeSyncButton.style.background = colors.backgroundSoft;
 			youtubeSyncButton.style.fontWeight = "700";
 			youtubeSyncButton.style.cursor = "pointer";
 			youtubeActions.appendChild(youtubeSyncButton);
 
-			const youtubeMasterButton = document.createElement("button");
-			youtubeMasterButton.type = "button";
-			youtubeMasterButton.textContent = "Make master";
-			youtubeMasterButton.style.height = "2rem";
-			youtubeMasterButton.style.padding = ".4rem .7rem";
-			youtubeMasterButton.style.border = "1px solid " + colors.accent;
-			youtubeMasterButton.style.borderRadius = ".55rem";
-			youtubeMasterButton.style.color = colors.text;
-			youtubeMasterButton.style.background = colors.backgroundSoft;
-			youtubeMasterButton.style.fontWeight = "700";
-			youtubeMasterButton.style.cursor = "pointer";
-			youtubeActions.appendChild(youtubeMasterButton);
+			const youtubeControlButton = document.createElement("button");
+			youtubeControlButton.type = "button";
+			youtubeControlButton.textContent = "Take control";
+			youtubeControlButton.style.height = "1.6rem";
+			youtubeControlButton.style.padding = ".2rem .45rem";
+			youtubeControlButton.style.border = "1px solid " + colors.accent;
+			youtubeControlButton.style.borderRadius = ".45rem";
+			youtubeControlButton.style.color = colors.text;
+			youtubeControlButton.style.background = colors.backgroundSoft;
+			youtubeControlButton.style.fontSize = ".75rem";
+			youtubeControlButton.style.fontWeight = "700";
+			youtubeControlButton.style.cursor = "pointer";
+			youtubeHeaderControls.appendChild(youtubeControlButton);
+
+			const youtubeSharedControlButton = document.createElement("button");
+			youtubeSharedControlButton.type = "button";
+			youtubeSharedControlButton.textContent = "Allow shared control";
+			youtubeSharedControlButton.hidden = true;
+			youtubeSharedControlButton.style.height = "2rem";
+			youtubeSharedControlButton.style.padding = ".4rem .7rem";
+			youtubeSharedControlButton.style.border = "1px solid " + colors.accent;
+			youtubeSharedControlButton.style.borderRadius = ".55rem";
+			youtubeSharedControlButton.style.color = colors.text;
+			youtubeSharedControlButton.style.background = colors.backgroundSoft;
+			youtubeSharedControlButton.style.fontWeight = "700";
+			youtubeSharedControlButton.style.cursor = "pointer";
+			youtubeActions.appendChild(youtubeSharedControlButton);
 
 			const youtubeLockButton = document.createElement("button");
 			youtubeLockButton.type = "button";
-			youtubeLockButton.textContent = "Lock";
+			youtubeLockButton.textContent = "Lock takeover";
 			youtubeLockButton.hidden = true;
 			youtubeLockButton.style.height = "2rem";
 			youtubeLockButton.style.padding = ".4rem .7rem";
@@ -1019,6 +1046,12 @@ SOFTWARE.
 			userRuleToggles.style.gap = ".15rem";
 			userRuleToggles.style.paddingTop = ".3rem";
 			userMenu.appendChild(userRuleToggles);
+
+			const userMenuActions = document.createElement("div");
+			userMenuActions.style.display = "grid";
+			userMenuActions.style.gap = ".15rem";
+			userMenuActions.style.paddingTop = ".3rem";
+			userMenu.appendChild(userMenuActions);
 
 			const rulesDialog = document.createElement("dialog");
 			rulesDialog.style.width = "min(32rem,calc(100% - 2rem))";
@@ -1239,11 +1272,14 @@ SOFTWARE.
 
 			function openUserMenu(actor, clientX, clientY, anchor) {
 				if (!actor || !USER_ID_PATTERN.test(actor.userId || "")) return;
+				const participant = participants.get(actor.userId);
+				const target = {...actor, peerId: actor.peerId || participant?.peerId || ""};
 				userMenuTitle.textContent = (actor.name || "Anonymous") + " · " + actor.userId.slice(0, 8);
 				userMenuMode.replaceChildren();
 				if (actor.mode === "VR" || actor.mode === "Web") userMenuMode.appendChild(createModeBadge(actor.mode));
 				userRuleToggles.replaceChildren();
-				for (const [key, label] of [["chatSharepad", "Ignore chat and Sharepad"], ["streamLinks", "Ignore links and streams"]]) {
+				userMenuActions.replaceChildren();
+				for (const [key, label] of [["chatSharepad", "Ignore chat and Sharepad"], ["streamLinks", "Ignore links and streams"], ["youtubeControl", "Ignore YouTube control"]]) {
 					const labelElement = document.createElement("label");
 					labelElement.setAttribute("role", "menuitemcheckbox");
 					labelElement.style.display = "flex";
@@ -1259,12 +1295,28 @@ SOFTWARE.
 					labelElement.setAttribute("aria-checked", String(input.checked));
 					input.addEventListener("change", () => {
 						userRules[actor.userId] = {...userRules[actor.userId], name: actor.name || "Anonymous", [key]: input.checked};
-						if (!userRules[actor.userId].chatSharepad && !userRules[actor.userId].streamLinks) delete userRules[actor.userId];
+						if (!userRules[actor.userId].chatSharepad && !userRules[actor.userId].streamLinks && !userRules[actor.userId].youtubeControl) delete userRules[actor.userId];
 						labelElement.setAttribute("aria-checked", String(input.checked));
 						saveUserRules();
+						if (key === "youtubeControl" && input.checked) userMenuActions.replaceChildren();
 					});
 					labelElement.append(input, document.createTextNode(" " + label));
 					userRuleToggles.appendChild(labelElement);
+				}
+				if (isYoutubeMaster() && target.peerId && target.peerId !== selfId && !isIgnored(target, "youtubeControl")) {
+					const giveControl = document.createElement("button");
+					giveControl.type = "button";
+					giveControl.textContent = "Give control";
+					giveControl.style.padding = ".45rem";
+					giveControl.style.border = "1px solid " + colors.accent;
+					giveControl.style.borderRadius = ".45rem";
+					giveControl.style.color = colors.accentStrong;
+					giveControl.style.background = colors.backgroundSoft;
+					giveControl.addEventListener("click", () => {
+						transferYoutubeControl(target);
+						closeUserMenu();
+					});
+					userMenuActions.appendChild(giveControl);
 				}
 				userMenu.hidden = false;
 				userMenu.style.display = "grid";
@@ -1434,7 +1486,7 @@ SOFTWARE.
 				return {
 					content: cloneYoutubeContent(state.content),
 					playback: cloneYoutubePlayback(state.playback),
-					master: state.master ? {peerId: state.master.peerId, actor: {...state.master.actor}, locked: state.master.locked} : null,
+					master: state.master ? {peerId: state.master.peerId, actor: {...state.master.actor}, locked: state.master.locked, sharedControl: Boolean(state.master.sharedControl)} : null,
 					clockPeerId: state.clockPeerId,
 					version: {...state.version}
 				};
@@ -1452,7 +1504,7 @@ SOFTWARE.
 			}
 
 			function isValidYoutubeState(state) {
-				return state && isValidYoutubeContent(state.content) && isValidYoutubePlayback(state.playback) && typeof state.clockPeerId === "string" && Number.isSafeInteger(state.version?.counter) && state.version.counter >= 0 && typeof state.version?.peerId === "string" && (state.master === null || (typeof state.master?.peerId === "string" && state.master.peerId && isValidActor(state.master.actor) && typeof state.master.locked === "boolean"));
+				return state && isValidYoutubeContent(state.content) && isValidYoutubePlayback(state.playback) && typeof state.clockPeerId === "string" && Number.isSafeInteger(state.version?.counter) && state.version.counter >= 0 && typeof state.version?.peerId === "string" && (state.master === null || (typeof state.master?.peerId === "string" && state.master.peerId && isValidActor(state.master.actor) && typeof state.master.locked === "boolean" && (state.master.sharedControl === undefined || typeof state.master.sharedControl === "boolean")));
 			}
 
 			function isNewerVersion(candidate, current) {
@@ -1495,6 +1547,26 @@ SOFTWARE.
 
 			function canPublishYoutubeControls() {
 				return youtubeSynced && (!youtubeState.master || isYoutubeMaster());
+			}
+
+			function canRequestYoutubeControls() {
+				return youtubeSynced && Boolean(youtubeState.master?.sharedControl) && !isYoutubeMaster();
+			}
+
+			function isYoutubeActorFromPeer(actor, peerId) {
+				if (!isValidActor(actor) || !peerId) return false;
+				const participant = [...participants.values()].find(candidate => candidate.peerId === peerId);
+				return !participant || participant.userId === actor.userId;
+			}
+
+			function submitYoutubeSnapshot(snapshot) {
+				if (canPublishYoutubeControls()) {
+					publishYoutubeState(snapshot.content, snapshot.playback, youtubeState.master);
+					return true;
+				}
+				if (!canRequestYoutubeControls()) return false;
+				connection?.sendYouTube({kind: "control", actor: currentActor(), content: cloneYoutubeContent(snapshot.content), playback: cloneYoutubePlayback(snapshot.playback)}, [youtubeState.master.peerId]).catch(error => setNotice("YouTube control request failed: " + (error instanceof Error ? error.message : String(error)), true));
+				return true;
 			}
 
 			function currentSharedYoutubePlayback() {
@@ -1650,16 +1722,20 @@ SOFTWARE.
 			function renderYoutubeControls() {
 				const master = youtubeState.master;
 				const selfMaster = isYoutubeMaster();
-				youtubeRoleStatus.textContent = master ? "Master: " + (master.actor.name || master.actor.userId.slice(0, 8)) : "No master";
+				youtubeRoleStatus.textContent = master ? "Controller: " + (master.actor.name || master.actor.userId.slice(0, 8)) : "No controller";
 				youtubeSyncButton.textContent = youtubeSynced ? "Sync" : "Not sync";
-				youtubeSyncButton.disabled = youtubeSynced || !roomReady;
-				youtubeSyncButton.style.borderColor = youtubeSynced ? colors.accent : colors.warning;
-				youtubeSyncButton.style.color = youtubeSynced ? colors.text : colors.warning;
-				youtubeMasterButton.hidden = selfMaster;
-				youtubeMasterButton.disabled = !roomReady || Boolean(master?.locked);
-				youtubeMasterButton.title = master?.locked ? "The current master locked takeover." : "Use the local playback as the room master.";
+				youtubeSyncButton.disabled = !roomReady;
+				youtubeSyncButton.title = youtubeSynced ? "Leave room playback and keep local changes private." : "Follow the current room playback.";
+				youtubeSyncButton.style.borderColor = youtubeSynced ? colors.success : colors.warning;
+				youtubeSyncButton.style.color = youtubeSynced ? colors.success : colors.warning;
+				youtubeSyncButton.style.opacity = "1";
+				youtubeControlButton.textContent = selfMaster ? "Release control" : "Take control";
+				youtubeControlButton.disabled = !roomReady || Boolean(master?.locked && !selfMaster);
+				youtubeControlButton.title = master?.locked && !selfMaster ? "The controller locked takeover." : selfMaster ? "Return the room to shared control." : "Use the local playback and take control.";
+				youtubeSharedControlButton.hidden = !selfMaster;
+				youtubeSharedControlButton.textContent = master?.sharedControl ? "Stop shared control" : "Allow shared control";
 				youtubeLockButton.hidden = !selfMaster;
-				youtubeLockButton.textContent = master?.locked ? "Unlock" : "Lock";
+				youtubeLockButton.textContent = master?.locked ? "Unlock takeover" : "Lock takeover";
 				youtubeInput.disabled = !roomReady;
 				youtubeLoadButton.disabled = !roomReady;
 				if (youtubePlayerError) {
@@ -1672,13 +1748,16 @@ SOFTWARE.
 					youtubeStatus.textContent = "Local playback. Click Not sync to follow the room again.";
 					youtubeStatus.style.color = colors.warning;
 				} else if (selfMaster) {
-					youtubeStatus.textContent = master.locked ? "Master control is locked." : "Master control is open for takeover.";
+					youtubeStatus.textContent = (master.sharedControl ? "Shared control is allowed. " : "Control is exclusive. ") + (master.locked ? "Takeover is locked." : "Takeover is open.");
 					youtubeStatus.style.color = colors.label;
 				} else if (!master) {
 					youtubeStatus.textContent = "Shared control. The last action wins.";
 					youtubeStatus.style.color = colors.label;
+				} else if (master.sharedControl) {
+					youtubeStatus.textContent = "Shared control is allowed by the controller.";
+					youtubeStatus.style.color = colors.label;
 				} else {
-					youtubeStatus.textContent = "Following the room master.";
+					youtubeStatus.textContent = "Following the room controller.";
 					youtubeStatus.style.color = colors.label;
 				}
 			}
@@ -1692,7 +1771,7 @@ SOFTWARE.
 				youtubeState = {
 					content: cloneYoutubeContent(content),
 					playback: cloneYoutubePlayback(playback),
-					master: master ? {peerId: master.peerId, actor: {...master.actor}, locked: master.locked} : null,
+					master: master ? {peerId: master.peerId, actor: {...master.actor}, locked: master.locked, sharedControl: Boolean(master.sharedControl)} : null,
 					clockPeerId: selfId,
 					version: {counter: youtubeState.version.counter + 1, peerId: selfId}
 				};
@@ -1703,6 +1782,26 @@ SOFTWARE.
 				localYoutubePlayback = cloneYoutubePlayback(playback);
 				sendYoutubeState(youtubeState);
 				renderYoutubeControls();
+			}
+
+			function transferYoutubeControl(target) {
+				if (!isYoutubeMaster() || !target.peerId || target.peerId === selfId || !isValidActor(target) || isIgnored(target, "youtubeControl")) return;
+				const snapshot = readLocalYoutubeSnapshot();
+				youtubeState = {
+					content: cloneYoutubeContent(snapshot.content),
+					playback: cloneYoutubePlayback(snapshot.playback),
+					master: {peerId: target.peerId, actor: {userId: target.userId, name: target.name, mode: target.mode}, locked: youtubeState.master.locked, sharedControl: youtubeState.master.sharedControl},
+					clockPeerId: target.peerId,
+					version: {counter: youtubeState.version.counter + 1, peerId: selfId}
+				};
+				youtubeStateReceivedAt = performance.now();
+				youtubeSynced = true;
+				youtubePlayerError = "";
+				localYoutubeContent = cloneYoutubeContent(snapshot.content);
+				localYoutubePlayback = cloneYoutubePlayback(snapshot.playback);
+				sendYoutubeState(youtubeState);
+				renderYoutubeControls();
+				setNotice("Control given to " + (target.name || target.userId.slice(0, 8)) + ".");
 			}
 
 			function acceptYoutubeState(candidate, senderPeerId = "", fromSnapshot = false) {
@@ -1729,11 +1828,36 @@ SOFTWARE.
 					if (youtubeSynced) synchronizeYoutubePlayback(youtubeState.playback);
 					return;
 				}
-				if (message.kind !== "takeover" || !isYoutubeMaster() || youtubeState.master.locked || !isValidActor(message.actor) || !isValidYoutubeContent(message.content) || !isValidYoutubePlayback(message.playback) || !senderPeerId) return;
+				if (message.kind === "controlDenied") {
+					if (senderPeerId !== youtubeState.master?.peerId || !youtubeSynced) return;
+					youtubeSynced = false;
+					setNotice("The controller rejected this YouTube action.", true);
+					renderYoutubeControls();
+					return;
+				}
+				if (message.kind === "takeoverDenied") {
+					if (senderPeerId === youtubeState.master?.peerId) setNotice("The controller rejected takeover.", true);
+					return;
+				}
+				if (message.kind === "control") {
+					if (!isYoutubeMaster() || !isYoutubeActorFromPeer(message.actor, senderPeerId) || !isValidYoutubeContent(message.content) || !isValidYoutubePlayback(message.playback)) return;
+					if (!youtubeState.master.sharedControl || isIgnored(message.actor, "youtubeControl")) {
+						connection?.sendYouTube({kind: "controlDenied"}, [senderPeerId]).catch(error => setNotice("YouTube control response failed: " + (error instanceof Error ? error.message : String(error)), true));
+						return;
+					}
+					applyYoutubeSnapshot(message.content, message.playback);
+					publishYoutubeState(message.content, message.playback, youtubeState.master);
+					return;
+				}
+				if (message.kind !== "takeover" || !isYoutubeMaster() || !isYoutubeActorFromPeer(message.actor, senderPeerId) || !isValidYoutubeContent(message.content) || !isValidYoutubePlayback(message.playback)) return;
+				if (youtubeState.master.locked || isIgnored(message.actor, "youtubeControl")) {
+					connection?.sendYouTube({kind: "takeoverDenied"}, [senderPeerId]).catch(error => setNotice("YouTube takeover response failed: " + (error instanceof Error ? error.message : String(error)), true));
+					return;
+				}
 				youtubeState = {
 					content: cloneYoutubeContent(message.content),
 					playback: cloneYoutubePlayback(message.playback),
-					master: {peerId: senderPeerId, actor: {...message.actor}, locked: false},
+					master: {peerId: senderPeerId, actor: {...message.actor}, locked: false, sharedControl: false},
 					clockPeerId: senderPeerId,
 					version: {counter: youtubeState.version.counter + 1, peerId: selfId}
 				};
@@ -1750,10 +1874,8 @@ SOFTWARE.
 				localYoutubePlayback.status = status;
 				if (status === "ended" && localYoutubeContent?.kind === "playlist") youtubeNaturalAdvanceUntil = performance.now() + 3000;
 				if (performance.now() < youtubeRemoteGuardUntil) return;
-				if (canPublishYoutubeControls()) {
-					const snapshot = readLocalYoutubeSnapshot();
-					publishYoutubeState(snapshot.content, snapshot.playback, youtubeState.master);
-				} else if (youtubeSynced && youtubeState.master && status !== youtubeState.playback.status && status !== "ended") {
+				const snapshot = readLocalYoutubeSnapshot();
+				if (!submitYoutubeSnapshot(snapshot) && youtubeSynced && youtubeState.master && status !== youtubeState.playback.status && status !== "ended") {
 					youtubeSynced = false;
 					renderYoutubeControls();
 				}
@@ -1761,10 +1883,8 @@ SOFTWARE.
 
 			function handleYoutubePlaybackRate() {
 				if (performance.now() < youtubeRemoteGuardUntil) return;
-				if (canPublishYoutubeControls()) {
-					const snapshot = readLocalYoutubeSnapshot();
-					publishYoutubeState(snapshot.content, snapshot.playback, youtubeState.master);
-				} else if (youtubeSynced && youtubeState.master) {
+				const snapshot = readLocalYoutubeSnapshot();
+				if (!submitYoutubeSnapshot(snapshot) && youtubeSynced && youtubeState.master) {
 					youtubeSynced = false;
 					renderYoutubeControls();
 				}
@@ -1779,8 +1899,8 @@ SOFTWARE.
 					const expectedPosition = youtubeLastSample.position + (youtubeLastSample.status === "playing" ? (now - youtubeLastSample.at) / 1000 : 0);
 					const localSeek = sample.key === youtubeLastSample.key && Math.abs(sample.position - expectedPosition) > YOUTUBE_LOCAL_SEEK_SECONDS;
 					const contentChanged = sample.key !== youtubeContentKey(youtubeState.content);
-					if (canPublishYoutubeControls() && (localSeek || contentChanged)) publishYoutubeState(snapshot.content, snapshot.playback, youtubeState.master);
-					else if (youtubeSynced && youtubeState.master && (localSeek || (contentChanged && now > youtubeNaturalAdvanceUntil))) {
+					const sharedAction = localSeek || (contentChanged && now > youtubeNaturalAdvanceUntil);
+					if (sharedAction && !submitYoutubeSnapshot(snapshot) && youtubeSynced && youtubeState.master) {
 						youtubeSynced = false;
 						renderYoutubeControls();
 					}
@@ -1896,7 +2016,7 @@ SOFTWARE.
 				const streamId = streamState.mode === "stream" ? streamState.stream.id : "";
 				const connected = Boolean(connection);
 				const joined = connected && roomReady;
-				const youtubeVisible = joined && communityAccessAccepted && !(isReceiver && Boolean(streamId));
+				const collaborationVisible = joined && communityAccessAccepted && !(isReceiver && Boolean(streamId));
 				if (isReceiver) {
 					const controllerUrl = new URL(location.pathname, location.origin);
 					controllerUrl.searchParams.set("room", currentRoomId);
@@ -1920,14 +2040,15 @@ SOFTWARE.
 				communityAccessPanel.style.display = joined && !communityAccessAccepted ? "grid" : "none";
 				chatPanel.hidden = !joined || !communityAccessAccepted;
 				chatPanel.style.display = joined && communityAccessAccepted ? "grid" : "none";
-				sharepadPanel.hidden = !joined || !communityAccessAccepted || (isReceiver && Boolean(streamId));
-				controls.hidden = !joined || (isReceiver && !youtubeVisible);
-				controls.style.display = joined && (!isReceiver || youtubeVisible) ? "grid" : "none";
-				youtubePanel.hidden = !youtubeVisible;
-				youtubePanel.style.display = youtubeVisible ? "grid" : "none";
+				sharepadPanel.hidden = !collaborationVisible;
+				sharepadPanel.style.display = collaborationVisible ? "grid" : "none";
+				controls.hidden = !joined || (isReceiver && !collaborationVisible);
+				controls.style.display = joined && (!isReceiver || collaborationVisible) ? "grid" : "none";
+				youtubePanel.hidden = !collaborationVisible;
+				youtubePanel.style.display = collaborationVisible ? "grid" : "none";
 				streamControls.hidden = isReceiver || !joined;
 				streamControls.style.display = !isReceiver && joined ? "flex" : "none";
-				if (youtubeVisible) ensureYoutubePlayer();
+				if (collaborationVisible) ensureYoutubePlayer();
 				renderYoutubeControls();
 				addressInput.disabled = !isReceiver && (!connected || !roomReady);
 				openAddressButton.disabled = !isReceiver && (!connected || !roomReady);
@@ -2101,12 +2222,21 @@ SOFTWARE.
 
 			youtubeForm.addEventListener("submit", event => {
 				event.preventDefault();
-				const content = parseYoutubeUrl(youtubeInput.value);
-				if (!content) return setNotice("Enter a valid YouTube video or playlist URL.", true);
+				const value = youtubeInput.value.trim();
+				if (!value) return setNotice("Enter a YouTube URL or search terms.", true);
+				const content = parseYoutubeUrl(value);
+				if (!content) {
+					const searchUrl = new URL("https://www.youtube.com/results");
+					searchUrl.searchParams.set("search_query", value);
+					const popup = window.open("about:blank", "_blank", "popup=yes,width=960,height=720,resizable=yes,scrollbars=yes");
+					if (!popup) return setNotice("YouTube search popup was blocked.", true);
+					popup.opener = null;
+					popup.location.replace(searchUrl.href);
+					return;
+				}
 				const playback = {status: "playing", position: 0, rate: 1};
 				applyYoutubeSnapshot(content, playback);
-				if (canPublishYoutubeControls()) publishYoutubeState(content, playback, youtubeState.master);
-				else {
+				if (!submitYoutubeSnapshot({content, playback})) {
 					youtubeSynced = false;
 					youtubePlayerError = "";
 					renderYoutubeControls();
@@ -2115,21 +2245,40 @@ SOFTWARE.
 			});
 
 			youtubeSyncButton.addEventListener("click", () => {
-				if (youtubeSynced) return;
+				if (!roomReady) return;
+				if (youtubeSynced) {
+					const snapshot = readLocalYoutubeSnapshot();
+					if (isYoutubeMaster()) publishYoutubeState(snapshot.content, snapshot.playback, null);
+					youtubeSynced = false;
+					youtubePlayerError = "";
+					renderYoutubeControls();
+					return;
+				}
 				youtubeSynced = true;
 				youtubePlayerError = "";
 				applyYoutubeSnapshot(youtubeState.content, currentSharedYoutubePlayback());
 				renderYoutubeControls();
 			});
 
-			youtubeMasterButton.addEventListener("click", () => {
-				if (!roomReady || youtubeState.master?.locked) return;
+			youtubeControlButton.addEventListener("click", () => {
+				if (!roomReady) return;
 				const snapshot = readLocalYoutubeSnapshot();
-				if (!youtubeState.master) {
-					publishYoutubeState(snapshot.content, snapshot.playback, {peerId: selfId, actor: currentActor(), locked: false});
+				if (isYoutubeMaster()) {
+					publishYoutubeState(snapshot.content, snapshot.playback, null);
 					return;
 				}
-				connection?.sendYouTube({kind: "takeover", actor: currentActor(), content: snapshot.content, playback: snapshot.playback}).then(() => setNotice("Master takeover requested.")).catch(error => setNotice("Master request failed: " + (error instanceof Error ? error.message : String(error)), true));
+				if (youtubeState.master?.locked) return;
+				if (!youtubeState.master) {
+					publishYoutubeState(snapshot.content, snapshot.playback, {peerId: selfId, actor: currentActor(), locked: false, sharedControl: false});
+					return;
+				}
+				connection?.sendYouTube({kind: "takeover", actor: currentActor(), content: snapshot.content, playback: snapshot.playback}, [youtubeState.master.peerId]).then(() => setNotice("Control requested.")).catch(error => setNotice("Control request failed: " + (error instanceof Error ? error.message : String(error)), true));
+			});
+
+			youtubeSharedControlButton.addEventListener("click", () => {
+				if (!isYoutubeMaster()) return;
+				const snapshot = readLocalYoutubeSnapshot();
+				publishYoutubeState(snapshot.content, snapshot.playback, {...youtubeState.master, sharedControl: !youtubeState.master.sharedControl});
 			});
 
 			youtubeLockButton.addEventListener("click", () => {
