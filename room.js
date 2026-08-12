@@ -62,6 +62,7 @@ export function createRoomConnection(roomId, handlers) {
 	const chatAction = room.makeAction("chat");
 	const activityAction = room.makeAction("activity");
 	const profileAction = room.makeAction("profile");
+	const youtubeAction = room.makeAction("youtube");
 
 	const reportPresence = () => handlers.onPresence(Object.keys(room.getPeers()).length);
 	const reportRelayStatus = () => {
@@ -113,6 +114,7 @@ export function createRoomConnection(roomId, handlers) {
 	chatAction.onMessage = (message, {peerId}) => handlers.onChat(message, peerId);
 	activityAction.onMessage = (activity, {peerId}) => handlers.onActivity(activity, peerId);
 	profileAction.onMessage = (profile, {peerId}) => handlers.onProfile(profile, peerId);
+	youtubeAction.onMessage = (message, {peerId}) => handlers.onYouTube(message, peerId);
 	reportPresence();
 	window.queueMicrotask(reportRelayStatus);
 	relayStatusTimer = window.setInterval(reportRelayStatus, RELAY_STATUS_POLL_MS);
@@ -124,6 +126,8 @@ export function createRoomConnection(roomId, handlers) {
 		sendChat: message => chatAction.send(message),
 		sendActivity: activity => activityAction.send(activity),
 		sendProfile: profile => profileAction.send(profile),
+		sendYouTube: message => youtubeAction.send(message),
+		getPeerIds: () => Object.keys(room.getPeers()),
 		leave() {
 			active = false;
 			clearInterval(relayStatusTimer);
