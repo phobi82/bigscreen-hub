@@ -39,6 +39,8 @@ SOFTWARE.
 			const USER_RULES_KEY = "userRules";
 			const VDO_BASE_URL = "https://vdo.ninja/";
 			const YOUTUBE_API_URL = "https://www.youtube.com/iframe_api";
+			const YOUTUBE_SEARCH_API_URL = "https://www.googleapis.com/youtube/v3/search";
+			const YOUTUBE_SEARCH_MAX_RESULTS = 12;
 			const YOUTUBE_MONITOR_MS = 500;
 			const YOUTUBE_HEARTBEAT_MS = 1000;
 			const YOUTUBE_DRIFT_SECONDS = 1.5;
@@ -827,8 +829,8 @@ SOFTWARE.
 			youtubeInput.type = "text";
 			youtubeInput.id = "youtube-url";
 			youtubeInput.name = "youtube-url";
-			youtubeInput.ariaLabel = "YouTube video or playlist URL";
-			youtubeInput.placeholder = "YouTube video or playlist URL";
+			youtubeInput.ariaLabel = "YouTube video, playlist URL, or search term";
+			youtubeInput.placeholder = "YouTube URL or search term";
 			youtubeInput.autocomplete = "off";
 			youtubeInput.spellcheck = false;
 			youtubeInput.style.minWidth = "12rem";
@@ -844,7 +846,7 @@ SOFTWARE.
 
 			const youtubeLoadButton = document.createElement("button");
 			youtubeLoadButton.type = "submit";
-			youtubeLoadButton.textContent = "Load";
+			youtubeLoadButton.textContent = "🔍 Load / Search";
 			youtubeLoadButton.style.height = "2rem";
 			youtubeLoadButton.style.padding = ".4rem .7rem";
 			youtubeLoadButton.style.border = "0";
@@ -938,6 +940,110 @@ SOFTWARE.
 			youtubeStatus.setAttribute("aria-live", "polite");
 			youtubeStatus.style.color = colors.muted;
 			youtubePanel.appendChild(youtubeStatus);
+
+			const youtubeSearchOverlay = document.createElement("div");
+			youtubeSearchOverlay.hidden = true;
+			youtubeSearchOverlay.style.position = "fixed";
+			youtubeSearchOverlay.style.inset = "0";
+			youtubeSearchOverlay.style.zIndex = "1000";
+			youtubeSearchOverlay.style.display = "none";
+			youtubeSearchOverlay.style.alignItems = "center";
+			youtubeSearchOverlay.style.justifyContent = "center";
+			youtubeSearchOverlay.style.background = "rgba(0, 0, 0, .35)";
+			document.body.appendChild(youtubeSearchOverlay);
+
+			const youtubeSearchDialog = document.createElement("section");
+			youtubeSearchDialog.setAttribute("role", "dialog");
+			youtubeSearchDialog.setAttribute("aria-modal", "true");
+			youtubeSearchDialog.setAttribute("aria-labelledby", "youtube-search-title");
+			youtubeSearchDialog.style.display = "grid";
+			youtubeSearchDialog.style.gridTemplateRows = "auto auto auto minmax(0, 1fr)";
+			youtubeSearchDialog.style.gap = ".65rem";
+			youtubeSearchDialog.style.width = "76vw";
+			youtubeSearchDialog.style.height = "76vh";
+			youtubeSearchDialog.style.padding = ".75rem";
+			youtubeSearchDialog.style.border = "1px solid " + colors.line;
+			youtubeSearchDialog.style.borderRadius = ".75rem";
+			youtubeSearchDialog.style.boxSizing = "border-box";
+			youtubeSearchDialog.style.overflow = "hidden";
+			youtubeSearchDialog.style.background = colors.panel;
+			youtubeSearchDialog.style.boxShadow = "0 1rem 3rem rgba(0, 0, 0, .45)";
+			youtubeSearchOverlay.appendChild(youtubeSearchDialog);
+
+			const youtubeSearchHeader = document.createElement("div");
+			youtubeSearchHeader.style.display = "flex";
+			youtubeSearchHeader.style.alignItems = "center";
+			youtubeSearchHeader.style.justifyContent = "space-between";
+			youtubeSearchHeader.style.gap = ".5rem";
+			youtubeSearchDialog.appendChild(youtubeSearchHeader);
+
+			const youtubeSearchTitle = document.createElement("h2");
+			youtubeSearchTitle.id = "youtube-search-title";
+			youtubeSearchTitle.textContent = "Search YouTube";
+			youtubeSearchTitle.style.margin = "0";
+			youtubeSearchHeader.appendChild(youtubeSearchTitle);
+
+			const youtubeSearchCloseButton = document.createElement("button");
+			youtubeSearchCloseButton.type = "button";
+			youtubeSearchCloseButton.textContent = "×";
+			youtubeSearchCloseButton.ariaLabel = "Close YouTube search";
+			youtubeSearchCloseButton.style.width = "1.7rem";
+			youtubeSearchCloseButton.style.height = "1.7rem";
+			youtubeSearchCloseButton.style.padding = "0";
+			youtubeSearchCloseButton.style.border = "1px solid " + colors.line;
+			youtubeSearchCloseButton.style.borderRadius = ".45rem";
+			youtubeSearchCloseButton.style.color = colors.text;
+			youtubeSearchCloseButton.style.background = colors.backgroundSoft;
+			youtubeSearchCloseButton.style.fontSize = "1.2rem";
+			youtubeSearchCloseButton.style.cursor = "pointer";
+			youtubeSearchHeader.appendChild(youtubeSearchCloseButton);
+
+			const youtubeSearchForm = document.createElement("form");
+			youtubeSearchForm.style.display = "flex";
+			youtubeSearchForm.style.gap = ".45rem";
+			youtubeSearchDialog.appendChild(youtubeSearchForm);
+
+			const youtubeSearchInput = document.createElement("input");
+			youtubeSearchInput.type = "search";
+			youtubeSearchInput.ariaLabel = "YouTube search query";
+			youtubeSearchInput.placeholder = "Search videos";
+			youtubeSearchInput.autocomplete = "off";
+			youtubeSearchInput.style.minWidth = "0";
+			youtubeSearchInput.style.height = "2rem";
+			youtubeSearchInput.style.flex = "1";
+			youtubeSearchInput.style.padding = ".4rem .55rem";
+			youtubeSearchInput.style.border = "1px solid " + colors.line;
+			youtubeSearchInput.style.borderRadius = ".55rem";
+			youtubeSearchInput.style.boxSizing = "border-box";
+			youtubeSearchInput.style.color = colors.text;
+			youtubeSearchInput.style.background = colors.backgroundSoft;
+			youtubeSearchForm.appendChild(youtubeSearchInput);
+
+			const youtubeSearchButton = document.createElement("button");
+			youtubeSearchButton.type = "submit";
+			youtubeSearchButton.textContent = "Search";
+			youtubeSearchButton.style.height = "2rem";
+			youtubeSearchButton.style.padding = ".4rem .7rem";
+			youtubeSearchButton.style.border = "0";
+			youtubeSearchButton.style.borderRadius = ".55rem";
+			youtubeSearchButton.style.color = colors.background;
+			youtubeSearchButton.style.background = colors.accent;
+			youtubeSearchButton.style.fontWeight = "700";
+			youtubeSearchButton.style.cursor = "pointer";
+			youtubeSearchForm.appendChild(youtubeSearchButton);
+
+			const youtubeSearchStatus = document.createElement("small");
+			youtubeSearchStatus.setAttribute("aria-live", "polite");
+			youtubeSearchStatus.style.color = colors.muted;
+			youtubeSearchDialog.appendChild(youtubeSearchStatus);
+
+			const youtubeSearchResults = document.createElement("div");
+			youtubeSearchResults.style.display = "grid";
+			youtubeSearchResults.style.alignContent = "start";
+			youtubeSearchResults.style.gap = ".45rem";
+			youtubeSearchResults.style.minHeight = "0";
+			youtubeSearchResults.style.overflowY = "auto";
+			youtubeSearchDialog.appendChild(youtubeSearchResults);
 
 			const streamControls = document.createElement("section");
 			streamControls.hidden = isReceiver;
@@ -1156,6 +1262,9 @@ SOFTWARE.
 			let youtubeLastSample = null;
 			let youtubeLastHeartbeatAt = 0;
 			let youtubeMonitor = 0;
+			let youtubeSearchApiKeyPromise = null;
+			let youtubeSearchController = null;
+			let youtubeSearchQuery = "";
 			let localYoutubeContent = null;
 			let localYoutubePlayback = {status: "paused", position: 0, rate: 1};
 			let userRules = {};
@@ -1569,6 +1678,154 @@ SOFTWARE.
 				return YOUTUBE_VIDEO_ID_PATTERN.test(videoId) ? {kind: "video", videoId, playlistId: "", index: 0} : null;
 			}
 
+			function getYoutubeSearchApiKey() {
+				if (!youtubeSearchApiKeyPromise) {
+					youtubeSearchApiKeyPromise = import("./config.js").then(module => {
+						const key = typeof module.YOUTUBE_API_KEY === "string" ? module.YOUTUBE_API_KEY.trim() : "";
+						if (!key || key === "...") throw new Error("YouTube search is not configured. Add a valid key to config.js.");
+						return key;
+					}).catch(error => {
+						youtubeSearchApiKeyPromise = null;
+						if (error instanceof Error && error.message.startsWith("YouTube search is not configured.")) throw error;
+						throw new Error("YouTube search is not configured. Add a valid config.js file.");
+					});
+				}
+				return youtubeSearchApiKeyPromise;
+			}
+
+			function setYoutubeSearchStatus(message, error = false) {
+				youtubeSearchStatus.textContent = message;
+				youtubeSearchStatus.style.color = error ? colors.warning : colors.muted;
+			}
+
+			function decodeYoutubeText(value) {
+				return String(value).replace(/&(#x[\da-f]+|#\d+|amp|quot|apos|lt|gt);/gi, (entity, code) => {
+					if (code[0] === "#") {
+						const hexadecimal = code[1].toLowerCase() === "x";
+						const codePoint = Number.parseInt(code.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
+						return Number.isSafeInteger(codePoint) && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+					}
+					return {amp: "&", quot: '"', apos: "'", lt: "<", gt: ">"}[code.toLowerCase()];
+				});
+			}
+
+			function closeYoutubeSearch() {
+				youtubeSearchController?.abort();
+				youtubeSearchController = null;
+				youtubeSearchButton.disabled = false;
+				youtubeSearchOverlay.hidden = true;
+				youtubeSearchOverlay.style.display = "none";
+				youtubeInput.focus();
+			}
+
+			function openYoutubeSearch(query) {
+				youtubeSearchOverlay.hidden = false;
+				youtubeSearchOverlay.style.display = "flex";
+				youtubeSearchInput.value = query;
+				youtubeSearchInput.focus();
+				searchYoutube(query);
+			}
+
+			function renderYoutubeSearchResults(items) {
+				youtubeSearchResults.replaceChildren();
+				let resultCount = 0;
+				for (const item of items) {
+					const videoId = item.id?.videoId || "";
+					if (!YOUTUBE_VIDEO_ID_PATTERN.test(videoId)) continue;
+					const result = document.createElement("button");
+					result.type = "button";
+					result.style.display = "grid";
+					result.style.gridTemplateColumns = "minmax(7.5rem, 10rem) minmax(0, 1fr)";
+					result.style.gap = ".65rem";
+					result.style.width = "100%";
+					result.style.padding = ".45rem";
+					result.style.border = "1px solid " + colors.line;
+					result.style.borderRadius = ".55rem";
+					result.style.color = colors.text;
+					result.style.background = colors.backgroundSoft;
+					result.style.textAlign = "left";
+					result.style.cursor = "pointer";
+
+					const thumbnail = document.createElement("img");
+					thumbnail.src = item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "";
+					thumbnail.alt = "";
+					thumbnail.loading = "lazy";
+					thumbnail.style.width = "100%";
+					thumbnail.style.aspectRatio = "16 / 9";
+					thumbnail.style.objectFit = "cover";
+					thumbnail.style.borderRadius = ".4rem";
+
+					const details = document.createElement("span");
+					details.style.display = "grid";
+					details.style.alignContent = "center";
+					details.style.gap = ".3rem";
+					details.style.minWidth = "0";
+					const title = document.createElement("strong");
+					title.textContent = decodeYoutubeText(item.snippet?.title || "Untitled video");
+					title.style.lineHeight = "1.25";
+					const channel = document.createElement("small");
+					channel.textContent = decodeYoutubeText(item.snippet?.channelTitle || "Unknown channel");
+					channel.style.color = colors.muted;
+					details.append(title, channel);
+					result.append(thumbnail, details);
+					result.addEventListener("click", () => {
+						closeYoutubeSearch();
+						loadYoutubeContent({kind: "video", videoId, playlistId: "", index: 0});
+					});
+					youtubeSearchResults.appendChild(result);
+					resultCount++;
+				}
+				return resultCount;
+			}
+
+			async function searchYoutube(query) {
+				const normalizedQuery = query.trim();
+				if (!normalizedQuery) return setYoutubeSearchStatus("Enter a search term.", true);
+				if (youtubeSearchController && normalizedQuery === youtubeSearchQuery) return;
+				youtubeSearchController?.abort();
+				const controller = new AbortController();
+				youtubeSearchController = controller;
+				youtubeSearchQuery = normalizedQuery;
+				youtubeSearchButton.disabled = true;
+				setYoutubeSearchStatus("Searching…");
+				try {
+					const key = await getYoutubeSearchApiKey();
+					const url = new URL(YOUTUBE_SEARCH_API_URL);
+					url.searchParams.set("part", "snippet");
+					url.searchParams.set("type", "video");
+					url.searchParams.set("videoEmbeddable", "true");
+					url.searchParams.set("maxResults", String(YOUTUBE_SEARCH_MAX_RESULTS));
+					url.searchParams.set("q", normalizedQuery);
+					url.searchParams.set("key", key);
+					let response;
+					try {
+						response = await fetch(url, {signal: controller.signal});
+					} catch (error) {
+						if (error?.name === "AbortError") return;
+						throw new Error("Could not reach YouTube. Check the network connection.");
+					}
+					let data = null;
+					try {
+						data = await response.json();
+					} catch {}
+					if (!response.ok || data?.error) {
+						const reason = data?.error?.errors?.[0]?.reason || "";
+						if (reason === "quotaExceeded" || reason === "dailyLimitExceeded") throw new Error("The YouTube search quota has been exceeded.");
+						throw new Error(data?.error?.message || "YouTube search failed with HTTP " + response.status + ".");
+					}
+					const items = Array.isArray(data?.items) ? data.items : [];
+					const resultCount = renderYoutubeSearchResults(items);
+					setYoutubeSearchStatus(resultCount ? resultCount + " result" + (resultCount === 1 ? "" : "s") + "." : "No videos found.");
+				} catch (error) {
+					if (error?.name !== "AbortError") setYoutubeSearchStatus(error instanceof Error ? error.message : "YouTube search failed.", true);
+				} finally {
+					if (youtubeSearchController === controller) {
+						youtubeSearchController = null;
+						youtubeSearchButton.disabled = false;
+					}
+				}
+			}
+
 			function youtubeContentKey(content) {
 				return content ? [content.kind, content.videoId, content.playlistId, content.index].join(":") : "";
 			}
@@ -1599,6 +1856,16 @@ SOFTWARE.
 				if (!canRequestYoutubeControls()) return false;
 				connection?.sendYouTube({kind: "control", actor: currentActor(), content: cloneYoutubeContent(snapshot.content), playback: cloneYoutubePlayback(snapshot.playback)}, [youtubeState.master.peerId]).catch(error => setNotice("YouTube control request failed: " + (error instanceof Error ? error.message : String(error)), true));
 				return true;
+			}
+
+			function loadYoutubeContent(content) {
+				const playback = {status: "playing", position: 0, rate: 1};
+				applyYoutubeSnapshot(content, playback);
+				if (!submitYoutubeSnapshot({content, playback})) {
+					youtubeSynced = false;
+					youtubePlayerError = "";
+					renderYoutubeControls();
+				}
 			}
 
 			function currentSharedYoutubePlayback() {
@@ -2255,17 +2522,20 @@ SOFTWARE.
 			youtubeForm.addEventListener("submit", event => {
 				event.preventDefault();
 				const value = youtubeInput.value.trim();
-				if (!value) return setNotice("Enter a YouTube video or playlist URL.", true);
+				if (!value) return setNotice("Enter a YouTube URL or search term.", true);
 				const content = parseYoutubeUrl(value);
-				if (!content) return setNotice("Enter a valid YouTube video or playlist URL.", true);
-				const playback = {status: "playing", position: 0, rate: 1};
-				applyYoutubeSnapshot(content, playback);
-				if (!submitYoutubeSnapshot({content, playback})) {
-					youtubeSynced = false;
-					youtubePlayerError = "";
-					renderYoutubeControls();
-				}
+				if (!content) return openYoutubeSearch(value);
+				loadYoutubeContent(content);
 				youtubeInput.value = "";
+			});
+
+			youtubeSearchCloseButton.addEventListener("click", closeYoutubeSearch);
+			youtubeSearchForm.addEventListener("submit", event => {
+				event.preventDefault();
+				searchYoutube(youtubeSearchInput.value);
+			});
+			window.addEventListener("keydown", event => {
+				if (event.key === "Escape" && !youtubeSearchOverlay.hidden) closeYoutubeSearch();
 			});
 
 			youtubeSyncButton.addEventListener("click", () => {

@@ -4,9 +4,9 @@ Bigscreen Interactive Hub is a static browser application for shared room state,
 
 ## GitHub Pages
 
-Live website: https://phobi82.github.io/bigscreen-hub/
+Live website: https://phobi82.github.io/bigscreen-hub/?room=github
 
-This repository contains the complete public website. Publish the `main` branch from the repository root with GitHub Pages. No build step, deployment token, or generated branch is required.
+This repository contains the complete public website. Pushes to `main` deploy it through the GitHub Pages workflow in `.github/workflows/pages.yml`; no application build step or generated branch is required.
 
 ## Architecture
 
