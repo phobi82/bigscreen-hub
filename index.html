@@ -812,8 +812,11 @@ SOFTWARE.
 			youtubeHeaderControls.style.alignItems = "center";
 			youtubeHeaderControls.style.gap = ".35rem";
 
-			const youtubeRoleStatus = document.createElement("strong");
+			const youtubeRoleStatus = document.createElement("div");
 			youtubeRoleStatus.textContent = "No controller";
+			youtubeRoleStatus.style.display = "flex";
+			youtubeRoleStatus.style.alignItems = "center";
+			youtubeRoleStatus.style.gap = ".35rem";
 			youtubeRoleStatus.style.color = colors.label;
 			youtubeRoleStatus.style.fontSize = ".8rem";
 			youtubeHeaderControls.appendChild(youtubeRoleStatus);
@@ -885,13 +888,19 @@ SOFTWARE.
 			youtubeSyncButton.disabled = true;
 			youtubeSyncButton.style.height = "2rem";
 			youtubeSyncButton.style.padding = ".4rem .7rem";
-			youtubeSyncButton.style.border = "1px solid " + colors.success;
+			youtubeSyncButton.style.border = "1px solid " + colors.accent;
 			youtubeSyncButton.style.borderRadius = ".55rem";
-			youtubeSyncButton.style.color = colors.success;
+			youtubeSyncButton.style.color = colors.accent;
 			youtubeSyncButton.style.background = colors.backgroundSoft;
 			youtubeSyncButton.style.fontWeight = "700";
 			youtubeSyncButton.style.cursor = "pointer";
 			youtubeActions.appendChild(youtubeSyncButton);
+
+			const youtubeControlActions = document.createElement("div");
+			youtubeControlActions.style.display = "flex";
+			youtubeControlActions.style.gap = ".2rem";
+			youtubeControlActions.style.flex = "0 0 auto";
+			youtubeHeaderControls.appendChild(youtubeControlActions);
 
 			const youtubeControlButton = document.createElement("button");
 			youtubeControlButton.type = "button";
@@ -905,7 +914,7 @@ SOFTWARE.
 			youtubeControlButton.style.fontSize = ".75rem";
 			youtubeControlButton.style.fontWeight = "700";
 			youtubeControlButton.style.cursor = "pointer";
-			youtubeHeaderControls.appendChild(youtubeControlButton);
+			youtubeControlActions.appendChild(youtubeControlButton);
 
 			const youtubeSharedControlButton = document.createElement("button");
 			youtubeSharedControlButton.type = "button";
@@ -923,17 +932,19 @@ SOFTWARE.
 
 			const youtubeLockButton = document.createElement("button");
 			youtubeLockButton.type = "button";
-			youtubeLockButton.textContent = "Lock takeover";
+			youtubeLockButton.textContent = "🔓";
 			youtubeLockButton.hidden = true;
-			youtubeLockButton.style.height = "2rem";
-			youtubeLockButton.style.padding = ".4rem .7rem";
+			youtubeLockButton.style.width = "1.6rem";
+			youtubeLockButton.style.height = "1.6rem";
+			youtubeLockButton.style.padding = "0";
 			youtubeLockButton.style.border = "1px solid " + colors.warning;
-			youtubeLockButton.style.borderRadius = ".55rem";
+			youtubeLockButton.style.borderRadius = ".45rem";
 			youtubeLockButton.style.color = colors.text;
 			youtubeLockButton.style.background = colors.backgroundSoft;
+			youtubeLockButton.style.fontSize = ".75rem";
 			youtubeLockButton.style.fontWeight = "700";
 			youtubeLockButton.style.cursor = "pointer";
-			youtubeActions.appendChild(youtubeLockButton);
+			youtubeControlActions.appendChild(youtubeLockButton);
 
 			const youtubeStatus = document.createElement("small");
 			youtubeStatus.textContent = "No video loaded.";
@@ -1484,29 +1495,33 @@ SOFTWARE.
 				});
 			}
 
+			function createParticipantButton(actor) {
+				const button = document.createElement("button");
+				button.className = "participant-row";
+				button.type = "button";
+				button.textContent = (actor.name || "Anonymous") + " · " + actor.userId.slice(0, 8) + " (" + actor.mode + ")";
+				const dot = document.createElement("span");
+				dot.className = "participant-dot";
+				const identity = document.createElement("span");
+				identity.className = "participant-identity";
+				identity.textContent = actor.name || "Anonymous";
+				const meta = document.createElement("span");
+				meta.className = "participant-meta";
+				const shortId = document.createElement("span");
+				shortId.className = "participant-id";
+				shortId.textContent = actor.userId.slice(0, 8);
+				meta.append(shortId, createModeBadge(actor.mode));
+				identity.appendChild(meta);
+				button.replaceChildren(dot, identity);
+				bindUserMenu(button, actor);
+				return button;
+			}
+
 			function renderParticipants() {
 				participantList.replaceChildren();
 				participantTitle.textContent = "Users · " + participants.size;
 				for (const actor of participants.values()) {
-					const button = document.createElement("button");
-					button.className = "participant-row";
-					button.type = "button";
-					button.textContent = (actor.name || "Anonymous") + " · " + actor.userId.slice(0, 8) + " (" + actor.mode + ")";
-					const dot = document.createElement("span");
-					dot.className = "participant-dot";
-					const identity = document.createElement("span");
-					identity.className = "participant-identity";
-					identity.textContent = actor.name || "Anonymous";
-					const meta = document.createElement("span");
-					meta.className = "participant-meta";
-					const shortId = document.createElement("span");
-					shortId.className = "participant-id";
-					shortId.textContent = actor.userId.slice(0, 8);
-					meta.append(shortId, createModeBadge(actor.mode));
-					identity.appendChild(meta);
-					button.replaceChildren(dot, identity);
-					bindUserMenu(button, actor);
-					participantList.appendChild(button);
+					participantList.appendChild(createParticipantButton(actor));
 				}
 			}
 
@@ -2021,12 +2036,17 @@ SOFTWARE.
 			function renderYoutubeControls() {
 				const master = youtubeState.master;
 				const selfMaster = isYoutubeMaster();
-				youtubeRoleStatus.textContent = master ? "Controller: " + (master.actor.name || master.actor.userId.slice(0, 8)) : "No controller";
-				youtubeSyncButton.textContent = youtubeSynced ? "Sync" : "Not sync";
+				if (master) {
+					const controller = createParticipantButton(master.actor);
+					controller.style.width = "auto";
+					controller.style.padding = ".1rem";
+					controller.style.borderBottom = "0";
+					controller.style.borderRadius = ".45rem";
+					youtubeRoleStatus.replaceChildren("Controller:", controller);
+				} else youtubeRoleStatus.textContent = "No controller";
+				youtubeSyncButton.textContent = youtubeSynced ? "Stop syncing" : "Sync";
 				youtubeSyncButton.disabled = !roomReady;
 				youtubeSyncButton.title = youtubeSynced ? "Leave room playback and keep local changes private." : "Follow the current room playback.";
-				youtubeSyncButton.style.borderColor = youtubeSynced ? colors.success : colors.warning;
-				youtubeSyncButton.style.color = youtubeSynced ? colors.success : colors.warning;
 				youtubeSyncButton.style.opacity = "1";
 				youtubeControlButton.textContent = selfMaster ? "Release control" : "Take control";
 				youtubeControlButton.disabled = !roomReady || Boolean(master?.locked && !selfMaster);
@@ -2034,30 +2054,33 @@ SOFTWARE.
 				youtubeSharedControlButton.hidden = !selfMaster;
 				youtubeSharedControlButton.textContent = master?.sharedControl ? "Stop shared control" : "Allow shared control";
 				youtubeLockButton.hidden = !selfMaster;
-				youtubeLockButton.textContent = master?.locked ? "Unlock takeover" : "Lock takeover";
+				youtubeLockButton.textContent = master?.locked ? "🔒" : "🔓";
+				youtubeLockButton.ariaLabel = master?.locked ? "Unlock takeover" : "Lock takeover";
+				youtubeLockButton.title = youtubeLockButton.ariaLabel;
+				youtubeLockButton.setAttribute("aria-pressed", String(Boolean(master?.locked)));
 				youtubeInput.disabled = !roomReady;
 				youtubeLoadButton.disabled = !roomReady;
 				if (youtubePlayerError) {
-					youtubeStatus.textContent = youtubePlayerError;
+					youtubeStatus.textContent = (youtubeSynced ? "Synced" : "Local playback") + " · " + youtubePlayerError;
 					youtubeStatus.style.color = colors.warning;
 				} else if (!youtubeState.content && !localYoutubeContent) {
-					youtubeStatus.textContent = "No video loaded.";
-					youtubeStatus.style.color = colors.muted;
+					youtubeStatus.textContent = (youtubeSynced ? "Synced" : "Local playback") + " · No video loaded.";
+					youtubeStatus.style.color = youtubeSynced ? colors.success : colors.warning;
 				} else if (!youtubeSynced) {
-					youtubeStatus.textContent = "Local playback. Click Not sync to follow the room again.";
+					youtubeStatus.textContent = "Local playback · Click Sync to follow the room again.";
 					youtubeStatus.style.color = colors.warning;
 				} else if (selfMaster) {
-					youtubeStatus.textContent = (master.sharedControl ? "Shared control is allowed. " : "Control is exclusive. ") + (master.locked ? "Takeover is locked." : "Takeover is open.");
-					youtubeStatus.style.color = colors.label;
+					youtubeStatus.textContent = "Synced · " + (master.sharedControl ? "Shared control is allowed. " : "Control is exclusive. ") + (master.locked ? "Takeover is locked." : "Takeover is open.");
+					youtubeStatus.style.color = colors.success;
 				} else if (!master) {
-					youtubeStatus.textContent = "Shared control. The last action wins.";
-					youtubeStatus.style.color = colors.label;
+					youtubeStatus.textContent = "Synced · Shared control. The last action wins.";
+					youtubeStatus.style.color = colors.success;
 				} else if (master.sharedControl) {
-					youtubeStatus.textContent = "Shared control is allowed by the controller.";
-					youtubeStatus.style.color = colors.label;
+					youtubeStatus.textContent = "Synced · Shared control is allowed by the controller.";
+					youtubeStatus.style.color = colors.success;
 				} else {
-					youtubeStatus.textContent = "Following the room controller.";
-					youtubeStatus.style.color = colors.label;
+					youtubeStatus.textContent = "Synced · Following the room controller.";
+					youtubeStatus.style.color = colors.success;
 				}
 			}
 
