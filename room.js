@@ -33,6 +33,12 @@ const ROOM_CONFIG = {appId: "bigscreen-stream-center"};
 const RELAY_STATUS_POLL_MS = 500;
 const SYNC_DELAY_MS = 120;
 const SYNC_TIMEOUT_MS = 1500;
+const REJOIN_DISCOVERY_DELAY_MS = 5000;
+const REJOIN_BASE_DELAY_MS = 1000;
+const REJOIN_MAX_DELAY_MS = 4000;
+const REJOIN_MAX_ATTEMPTS = 3;
+const REJOIN_JITTER_MS = 1000;
+const REJOIN_LEAVE_DELAY_MS = 250;
 
 const strategyUrl = STRATEGY_URLS[NETWORK_STRATEGY];
 
@@ -47,30 +53,34 @@ export {selfId};
 export function createRoomConnection(roomId, handlers) {
 	let syncTimer = 0;
 	let relayStatusTimer = 0;
+	let rejoinTimer = 0;
+	let rejoinAttempts = 0;
+	let roomGeneration = 0;
 	let relayReady = null;
 	let active = true;
-	const room = joinRoom(ROOM_CONFIG, roomId, {
-		onJoinError: details => handlers.onError(details.error)
-	});
-	const padAction = room.makeAction("pad");
-	const streamAction = room.makeAction("stream");
-	const stateRequestAction = room.makeAction("stateRequest", {
-		kind: "request",
-		onRequest: () => handlers.getState()
-	});
-	const navigateAction = room.makeAction("navigate");
-	const chatAction = room.makeAction("chat");
-	const activityAction = room.makeAction("activity");
-	const profileAction = room.makeAction("profile");
-	const youtubeAction = room.makeAction("youtube");
+	let room = null;
+	let padAction;
+	let streamAction;
+	let stateRequestAction;
+	let navigateAction;
+	let chatAction;
+	let activityAction;
+	let profileAction;
+	let youtubeAction;
+	const rejoinJitter = [...selfId].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % REJOIN_JITTER_MS;
 
 	const reportPresence = () => handlers.onPresence(Object.keys(room.getPeers()).length);
 	const reportRelayStatus = () => {
 		if (!active) return;
 		const ready = Object.values(getRelaySockets()).some(socket => socket.readyState === WebSocket.OPEN);
 		if (ready === relayReady) return;
+		const wasReady = relayReady;
 		relayReady = ready;
 		handlers.onRelayStatus(ready);
+		if (ready && !Object.keys(room.getPeers()).length) {
+			if (wasReady === false) rejoinAttempts = 0;
+			scheduleRejoin(REJOIN_DISCOVERY_DELAY_MS);
+		}
 	};
 
 	const synchronize = async () => {
@@ -99,22 +109,72 @@ export function createRoomConnection(roomId, handlers) {
 		syncTimer = window.setTimeout(synchronize, SYNC_DELAY_MS);
 	};
 
-	room.onPeerJoin = () => {
-		reportPresence();
-		scheduleSynchronization();
-		handlers.onPeerJoin?.();
-	};
-	room.onPeerLeave = peerId => {
-		reportPresence();
-		handlers.onPeerLeave?.(peerId);
-	};
-	padAction.onMessage = (state, {peerId}) => handlers.onPad(state, peerId);
-	streamAction.onMessage = (state, {peerId}) => handlers.onStream(state, peerId);
-	navigateAction.onMessage = (payload, {peerId}) => handlers.onNavigate(payload, peerId);
-	chatAction.onMessage = (message, {peerId}) => handlers.onChat(message, peerId);
-	activityAction.onMessage = (activity, {peerId}) => handlers.onActivity(activity, peerId);
-	profileAction.onMessage = (profile, {peerId}) => handlers.onProfile(profile, peerId);
-	youtubeAction.onMessage = (message, {peerId}) => handlers.onYouTube(message, peerId);
+	function scheduleRejoin(minimumDelay = 0) {
+		// Recreate the room when discovery or peer negotiation stalls.
+		if (!active || rejoinTimer || Object.keys(room?.getPeers() || {}).length || rejoinAttempts >= REJOIN_MAX_ATTEMPTS) return;
+		const delay = Math.max(minimumDelay, Math.min(REJOIN_BASE_DELAY_MS * 2 ** rejoinAttempts, REJOIN_MAX_DELAY_MS)) + rejoinJitter;
+		rejoinAttempts += 1;
+		rejoinTimer = window.setTimeout(() => {
+			if (!active || Object.keys(room?.getPeers() || {}).length) return;
+			roomGeneration += 1;
+			room.leave();
+			rejoinTimer = window.setTimeout(() => {
+				rejoinTimer = 0;
+				if (!active) return;
+				connectRoom(false);
+				reportPresence();
+			}, REJOIN_LEAVE_DELAY_MS);
+		}, delay);
+	}
+
+	function connectRoom(leaveExistingRoom = true) {
+		clearTimeout(syncTimer);
+		syncTimer = 0;
+		if (leaveExistingRoom) room?.leave();
+		const generation = ++roomGeneration;
+		room = joinRoom(ROOM_CONFIG, roomId, {
+			onJoinError: details => {
+				if (!active || generation !== roomGeneration) return;
+				handlers.onError(details.error);
+				scheduleRejoin();
+			}
+		});
+		padAction = room.makeAction("pad");
+		streamAction = room.makeAction("stream");
+		stateRequestAction = room.makeAction("stateRequest", {
+			kind: "request",
+			onRequest: () => handlers.getState()
+		});
+		navigateAction = room.makeAction("navigate");
+		chatAction = room.makeAction("chat");
+		activityAction = room.makeAction("activity");
+		profileAction = room.makeAction("profile");
+		youtubeAction = room.makeAction("youtube");
+		room.onPeerJoin = () => {
+			if (generation !== roomGeneration) return;
+			clearTimeout(rejoinTimer);
+			rejoinTimer = 0;
+			rejoinAttempts = 0;
+			reportPresence();
+			scheduleSynchronization();
+			handlers.onPeerJoin?.();
+		};
+		room.onPeerLeave = peerId => {
+			if (generation !== roomGeneration) return;
+			reportPresence();
+			handlers.onPeerLeave?.(peerId);
+		};
+		padAction.onMessage = (state, {peerId}) => generation === roomGeneration && handlers.onPad(state, peerId);
+		streamAction.onMessage = (state, {peerId}) => generation === roomGeneration && handlers.onStream(state, peerId);
+		navigateAction.onMessage = (payload, {peerId}) => generation === roomGeneration && handlers.onNavigate(payload, peerId);
+		chatAction.onMessage = (message, {peerId}) => generation === roomGeneration && handlers.onChat(message, peerId);
+		activityAction.onMessage = (activity, {peerId}) => generation === roomGeneration && handlers.onActivity(activity, peerId);
+		profileAction.onMessage = (profile, {peerId}) => generation === roomGeneration && handlers.onProfile(profile, peerId);
+		youtubeAction.onMessage = (message, {peerId}) => generation === roomGeneration && handlers.onYouTube(message, peerId);
+		if (relayReady) scheduleRejoin(REJOIN_DISCOVERY_DELAY_MS);
+	}
+
+	connectRoom();
 	reportPresence();
 	window.queueMicrotask(reportRelayStatus);
 	relayStatusTimer = window.setInterval(reportRelayStatus, RELAY_STATUS_POLL_MS);
@@ -130,8 +190,10 @@ export function createRoomConnection(roomId, handlers) {
 		getPeerIds: () => Object.keys(room.getPeers()),
 		leave() {
 			active = false;
+			roomGeneration += 1;
 			clearInterval(relayStatusTimer);
 			clearTimeout(syncTimer);
+			clearTimeout(rejoinTimer);
 			room.leave();
 		}
 	};
