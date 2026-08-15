@@ -37,6 +37,8 @@ SOFTWARE.
 			const COMMUNITY_ACCESS_KEY = "communityAccess";
 			const COMMUNITY_ACCESS_VERSION = 1;
 			const USER_RULES_KEY = "userRules";
+			const YOUTUBE_PERSONAL_PLAYLIST_KEY = "bigscreenYoutubePersonalPlaylist";
+			const YOUTUBE_PERSONAL_PLAYLIST_VERSION = 1;
 			const VDO_BASE_URL = "https://vdo.ninja/";
 			const YOUTUBE_API_URL = "https://www.youtube.com/iframe_api";
 			const YOUTUBE_SEARCH_API_URL = "https://www.googleapis.com/youtube/v3/search";
@@ -46,6 +48,11 @@ SOFTWARE.
 			const YOUTUBE_DRIFT_SECONDS = 1.5;
 			const YOUTUBE_LOCAL_SEEK_SECONDS = .75;
 			const YOUTUBE_REMOTE_GUARD_MS = 1500;
+			const YOUTUBE_QUEUE_MAX_ENTRIES = 200;
+			const YOUTUBE_PERSONAL_MAX_ENTRIES = 800;
+			const YOUTUBE_ENTRY_TITLE_MAX_LENGTH = 200;
+			const YOUTUBE_ENTRY_CHANNEL_MAX_LENGTH = 200;
+			const YOUTUBE_ENTRY_DESCRIPTION_MAX_LENGTH = 500;
 			const CHAT_MESSAGE_MAX_LENGTH = 1000;
 			const CHAT_NAME_CHANGE_DELAY_MS = 48 * 60 * 60 * 1000;
 			const WEBSITE_PRESETS = [
@@ -73,7 +80,9 @@ SOFTWARE.
 			const USER_ID_PATTERN = /^[a-f0-9]{32}$/;
 			const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 			const YOUTUBE_PLAYLIST_ID_PATTERN = /^[A-Za-z0-9_-]{10,128}$/;
+			const YOUTUBE_ENTRY_ID_PATTERN = /^[a-f0-9]{32}$/;
 			const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"]);
+			const YOUTUBE_THUMBNAIL_HOST_PATTERN = /(^|\.)ytimg\.com$/;
 			const params = new URLSearchParams(location.search);
 			const isReceiver = params.get("mode") === "view";
 			const colors = {
@@ -125,6 +134,22 @@ SOFTWARE.
 				.room-main > .full-width { grid-column: 1 / -1; }
 				.controller-access-url { white-space: nowrap; overflow-x: auto; }
 				.youtube-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+				.youtube-dialog-form { display: flex; gap: .45rem; }
+				.youtube-dialog-button { min-height: 1.8rem; padding: .3rem .55rem; border: 1px solid ${colors.line}; border-radius: .45rem; color: ${colors.text}; background: ${colors.backgroundSoft}; font-weight: 700; cursor: pointer; }
+				.youtube-dialog-button.primary { border-color: ${colors.accent}; color: ${colors.background}; background: ${colors.accent}; }
+				.youtube-dialog-button:disabled { cursor: default; opacity: .45; }
+				.youtube-entry-card { display: grid; grid-template-columns: minmax(7.5rem,10rem) minmax(0,1fr); gap: .65rem; width: 100%; padding: .45rem; border: 1px solid ${colors.line}; border-radius: .55rem; box-sizing: border-box; color: ${colors.text}; background: ${colors.backgroundSoft}; text-align: left; }
+				.youtube-entry-card.compact { grid-template-columns: 4.5rem minmax(0,1fr) auto; gap: .4rem; padding: .35rem; }
+				.youtube-entry-thumbnail { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .4rem; background: ${colors.panelSoft}; }
+				.youtube-entry-details { display: grid; align-content: center; gap: .25rem; min-width: 0; }
+				.youtube-entry-title { overflow: hidden; line-height: 1.25; text-overflow: ellipsis; }
+				.youtube-entry-meta { color: ${colors.muted}; font-size: .75rem; }
+				.youtube-entry-description { display: -webkit-box; overflow: hidden; color: ${colors.label}; font-size: .78rem; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+				.youtube-entry-actions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .15rem; }
+				.youtube-library-grid { display: grid; grid-template-columns: minmax(0,3fr) minmax(11rem,1fr); gap: .65rem; min-height: 0; }
+				.youtube-library-grid.personal { grid-template-columns: minmax(11rem,1fr) minmax(0,3fr); }
+				.youtube-list-column { display: grid; grid-template-rows: auto minmax(0,1fr); gap: .4rem; min-width: 0; min-height: 0; }
+				.youtube-list { display: grid; align-content: start; gap: .4rem; min-height: 0; overflow-y: auto; }
 				.participant-row { display: grid; grid-template-columns: .5rem minmax(0,1fr); gap: .4rem; width: 100%; padding: .4rem .1rem; border: 0; border-bottom: 1px solid ${colors.line}; border-radius: 0; color: ${colors.text}; background: transparent; font-size: .9rem; text-align: left; cursor: pointer; }
 				.participant-row:hover, .participant-row:focus-visible { background: ${colors.panel}; }
 				.participant-dot { width: .45rem; height: .45rem; margin-top: .35rem; border-radius: 50%; background: #5cca8f; }
@@ -153,6 +178,11 @@ SOFTWARE.
 					.room-main .sharepad-panel { order: 5; }
 					.controller-access-url { white-space: normal; overflow-wrap: anywhere; }
 					.chat-event { padding-left: 0; }
+					.youtube-library-grid, .youtube-library-grid.personal { grid-template-columns: minmax(0,1fr); }
+					.youtube-list-column.compact { display: none; }
+					.youtube-dialog { width: calc(100vw - 1rem) !important; height: calc(100vh - 1rem) !important; }
+					.youtube-dialog-form { flex-wrap: wrap; }
+					.youtube-dialog-form input { flex-basis: 12rem; }
 				}
 				@media (max-width: 560px) {
 					.site-header { grid-template-columns: auto 1fr; gap: .4rem .75rem; }
@@ -896,6 +926,13 @@ SOFTWARE.
 			youtubeSyncButton.style.cursor = "pointer";
 			youtubeActions.appendChild(youtubeSyncButton);
 
+			const youtubeListsButton = document.createElement("button");
+			youtubeListsButton.type = "button";
+			youtubeListsButton.className = "youtube-dialog-button";
+			youtubeListsButton.textContent = "Lists · 0";
+			youtubeListsButton.ariaLabel = "Open room queue and personal playlist";
+			youtubeActions.appendChild(youtubeListsButton);
+
 			const youtubeControlActions = document.createElement("div");
 			youtubeControlActions.style.display = "flex";
 			youtubeControlActions.style.gap = ".2rem";
@@ -929,6 +966,13 @@ SOFTWARE.
 			youtubeSharedControlButton.style.fontWeight = "700";
 			youtubeSharedControlButton.style.cursor = "pointer";
 			youtubeActions.appendChild(youtubeSharedControlButton);
+
+			const youtubeAllowAddingButton = document.createElement("button");
+			youtubeAllowAddingButton.type = "button";
+			youtubeAllowAddingButton.textContent = "Allow adding";
+			youtubeAllowAddingButton.hidden = true;
+			youtubeAllowAddingButton.className = "youtube-dialog-button";
+			youtubeActions.appendChild(youtubeAllowAddingButton);
 
 			const youtubeLockButton = document.createElement("button");
 			youtubeLockButton.type = "button";
@@ -964,13 +1008,14 @@ SOFTWARE.
 			document.body.appendChild(youtubeSearchOverlay);
 
 			const youtubeSearchDialog = document.createElement("section");
+			youtubeSearchDialog.className = "youtube-dialog";
 			youtubeSearchDialog.setAttribute("role", "dialog");
 			youtubeSearchDialog.setAttribute("aria-modal", "true");
 			youtubeSearchDialog.setAttribute("aria-labelledby", "youtube-search-title");
 			youtubeSearchDialog.style.display = "grid";
-			youtubeSearchDialog.style.gridTemplateRows = "auto auto auto minmax(0, 1fr)";
+			youtubeSearchDialog.style.gridTemplateRows = "auto minmax(0, 1fr)";
 			youtubeSearchDialog.style.gap = ".65rem";
-			youtubeSearchDialog.style.width = "76vw";
+			youtubeSearchDialog.style.width = "min(76vw, 70rem)";
 			youtubeSearchDialog.style.height = "76vh";
 			youtubeSearchDialog.style.padding = ".75rem";
 			youtubeSearchDialog.style.border = "1px solid " + colors.line;
@@ -997,7 +1042,7 @@ SOFTWARE.
 			const youtubeSearchCloseButton = document.createElement("button");
 			youtubeSearchCloseButton.type = "button";
 			youtubeSearchCloseButton.textContent = "×";
-			youtubeSearchCloseButton.ariaLabel = "Close YouTube search";
+			youtubeSearchCloseButton.ariaLabel = "Close YouTube dialog";
 			youtubeSearchCloseButton.style.width = "1.7rem";
 			youtubeSearchCloseButton.style.height = "1.7rem";
 			youtubeSearchCloseButton.style.padding = "0";
@@ -1009,10 +1054,27 @@ SOFTWARE.
 			youtubeSearchCloseButton.style.cursor = "pointer";
 			youtubeSearchHeader.appendChild(youtubeSearchCloseButton);
 
+			const youtubeSearchView = document.createElement("div");
+			youtubeSearchView.style.display = "grid";
+			youtubeSearchView.style.gridTemplateRows = "auto auto minmax(0, 1fr)";
+			youtubeSearchView.style.gap = ".65rem";
+			youtubeSearchView.style.minHeight = "0";
+			youtubeSearchDialog.appendChild(youtubeSearchView);
+
 			const youtubeSearchForm = document.createElement("form");
-			youtubeSearchForm.style.display = "flex";
-			youtubeSearchForm.style.gap = ".45rem";
-			youtubeSearchDialog.appendChild(youtubeSearchForm);
+			youtubeSearchForm.className = "youtube-dialog-form";
+			youtubeSearchView.appendChild(youtubeSearchForm);
+
+			const youtubeSearchType = document.createElement("select");
+			youtubeSearchType.ariaLabel = "YouTube search type";
+			youtubeSearchType.className = "youtube-dialog-button";
+			for (const [value, label] of [["video", "Videos"], ["playlist", "Playlists"]]) {
+				const option = document.createElement("option");
+				option.value = value;
+				option.textContent = label;
+				youtubeSearchType.appendChild(option);
+			}
+			youtubeSearchForm.appendChild(youtubeSearchType);
 
 			const youtubeSearchInput = document.createElement("input");
 			youtubeSearchInput.type = "search";
@@ -1046,7 +1108,7 @@ SOFTWARE.
 			const youtubeSearchStatus = document.createElement("small");
 			youtubeSearchStatus.setAttribute("aria-live", "polite");
 			youtubeSearchStatus.style.color = colors.muted;
-			youtubeSearchDialog.appendChild(youtubeSearchStatus);
+			youtubeSearchView.appendChild(youtubeSearchStatus);
 
 			const youtubeSearchResults = document.createElement("div");
 			youtubeSearchResults.style.display = "grid";
@@ -1054,7 +1116,52 @@ SOFTWARE.
 			youtubeSearchResults.style.gap = ".45rem";
 			youtubeSearchResults.style.minHeight = "0";
 			youtubeSearchResults.style.overflowY = "auto";
-			youtubeSearchDialog.appendChild(youtubeSearchResults);
+			youtubeSearchView.appendChild(youtubeSearchResults);
+
+			const youtubeLibraryView = document.createElement("div");
+			youtubeLibraryView.hidden = true;
+			youtubeLibraryView.style.display = "none";
+			youtubeLibraryView.style.gridTemplateRows = "auto minmax(0, 1fr)";
+			youtubeLibraryView.style.gap = ".65rem";
+			youtubeLibraryView.style.minHeight = "0";
+			youtubeSearchDialog.appendChild(youtubeLibraryView);
+
+			const youtubeLibraryTabs = document.createElement("div");
+			youtubeLibraryTabs.setAttribute("role", "tablist");
+			youtubeLibraryTabs.style.display = "flex";
+			youtubeLibraryTabs.style.gap = ".35rem";
+			youtubeLibraryView.appendChild(youtubeLibraryTabs);
+
+			const youtubeQueueTab = document.createElement("button");
+			youtubeQueueTab.type = "button";
+			youtubeQueueTab.className = "youtube-dialog-button";
+			youtubeQueueTab.setAttribute("role", "tab");
+			youtubeLibraryTabs.appendChild(youtubeQueueTab);
+
+			const youtubePersonalTab = document.createElement("button");
+			youtubePersonalTab.type = "button";
+			youtubePersonalTab.className = "youtube-dialog-button";
+			youtubePersonalTab.setAttribute("role", "tab");
+			youtubeLibraryTabs.appendChild(youtubePersonalTab);
+
+			const youtubeLibraryGrid = document.createElement("div");
+			youtubeLibraryGrid.className = "youtube-library-grid";
+			youtubeLibraryView.appendChild(youtubeLibraryGrid);
+
+			const youtubeQueueColumn = document.createElement("section");
+			youtubeQueueColumn.className = "youtube-list-column";
+			const youtubeQueueHeading = document.createElement("strong");
+			const youtubeQueueList = document.createElement("div");
+			youtubeQueueList.className = "youtube-list";
+			youtubeQueueColumn.append(youtubeQueueHeading, youtubeQueueList);
+
+			const youtubePersonalColumn = document.createElement("section");
+			youtubePersonalColumn.className = "youtube-list-column compact";
+			const youtubePersonalHeading = document.createElement("strong");
+			const youtubePersonalList = document.createElement("div");
+			youtubePersonalList.className = "youtube-list";
+			youtubePersonalColumn.append(youtubePersonalHeading, youtubePersonalList);
+			youtubeLibraryGrid.append(youtubeQueueColumn, youtubePersonalColumn);
 
 			const streamControls = document.createElement("section");
 			streamControls.hidden = isReceiver;
@@ -1276,6 +1383,9 @@ SOFTWARE.
 			let youtubeSearchApiKeyPromise = null;
 			let youtubeSearchController = null;
 			let youtubeSearchQuery = "";
+			let youtubeSearchEntries = [];
+			let youtubePersonalPlaylist = [];
+			let youtubeLibraryTab = "queue";
 			let localYoutubeContent = null;
 			let localYoutubePlayback = {status: "paused", position: 0, rate: 1};
 			let userRules = {};
@@ -1624,6 +1734,8 @@ SOFTWARE.
 				return {
 					content: null,
 					playback: {status: "paused", position: 0, rate: 1},
+					queue: [],
+					queueIndex: 0,
 					master: null,
 					clockPeerId: "",
 					version: {counter: 0, peerId: ""}
@@ -1638,14 +1750,67 @@ SOFTWARE.
 				return {status: playback.status, position: playback.position, rate: playback.rate};
 			}
 
+			function createYoutubeEntryId() {
+				return [...crypto.getRandomValues(new Uint8Array(16))].map(value => value.toString(16).padStart(2, "0")).join("");
+			}
+
+			function normalizeYoutubeThumbnail(value, content) {
+				try {
+					const url = new URL(value || "");
+					if (url.protocol === "https:" && YOUTUBE_THUMBNAIL_HOST_PATTERN.test(url.hostname)) return url.href;
+				} catch {}
+				return YOUTUBE_VIDEO_ID_PATTERN.test(content?.videoId || "") ? "https://i.ytimg.com/vi/" + content.videoId + "/mqdefault.jpg" : "";
+			}
+
+			function createYoutubeEntry(content, metadata = {}) {
+				return {
+					id: createYoutubeEntryId(),
+					content: cloneYoutubeContent(content),
+					title: String(metadata.title || "").slice(0, YOUTUBE_ENTRY_TITLE_MAX_LENGTH),
+					channelTitle: String(metadata.channelTitle || "").slice(0, YOUTUBE_ENTRY_CHANNEL_MAX_LENGTH),
+					thumbnailUrl: normalizeYoutubeThumbnail(metadata.thumbnailUrl, content),
+					publishedAt: typeof metadata.publishedAt === "string" ? metadata.publishedAt.slice(0, 32) : "",
+					description: String(metadata.description || "").slice(0, YOUTUBE_ENTRY_DESCRIPTION_MAX_LENGTH)
+				};
+			}
+
+			function cloneYoutubeEntry(entry, newId = false) {
+				return {
+					id: newId ? createYoutubeEntryId() : entry.id,
+					content: cloneYoutubeContent(entry.content),
+					title: entry.title,
+					channelTitle: entry.channelTitle,
+					thumbnailUrl: entry.thumbnailUrl,
+					publishedAt: entry.publishedAt,
+					description: entry.description
+				};
+			}
+
+			function isValidYoutubeEntry(entry) {
+				if (!entry || !YOUTUBE_ENTRY_ID_PATTERN.test(entry.id || "") || entry.content === null || !isValidYoutubeContent(entry.content)) return false;
+				if (typeof entry.title !== "string" || entry.title.length > YOUTUBE_ENTRY_TITLE_MAX_LENGTH || typeof entry.channelTitle !== "string" || entry.channelTitle.length > YOUTUBE_ENTRY_CHANNEL_MAX_LENGTH) return false;
+				if (typeof entry.description !== "string" || entry.description.length > YOUTUBE_ENTRY_DESCRIPTION_MAX_LENGTH || typeof entry.publishedAt !== "string" || entry.publishedAt.length > 32 || (entry.publishedAt && !Number.isFinite(Date.parse(entry.publishedAt)))) return false;
+				return entry.thumbnailUrl === "" || normalizeYoutubeThumbnail(entry.thumbnailUrl, null) === entry.thumbnailUrl;
+			}
+
 			function cloneYoutubeState(state) {
 				return {
 					content: cloneYoutubeContent(state.content),
 					playback: cloneYoutubePlayback(state.playback),
-					master: state.master ? {peerId: state.master.peerId, actor: {...state.master.actor}, locked: state.master.locked, sharedControl: Boolean(state.master.sharedControl)} : null,
+					queue: Array.isArray(state.queue) ? state.queue.map(entry => cloneYoutubeEntry(entry)) : [],
+					queueIndex: Number.isSafeInteger(state.queueIndex) ? state.queueIndex : 0,
+					master: state.master ? {peerId: state.master.peerId, actor: {...state.master.actor}, locked: state.master.locked, sharedControl: Boolean(state.master.sharedControl), allowAdding: Boolean(state.master.allowAdding)} : null,
 					clockPeerId: state.clockPeerId,
 					version: {...state.version}
 				};
+			}
+
+			function cloneYoutubeSharedState(state) {
+				const shared = cloneYoutubeState(state);
+				shared.queueCursorId = shared.queueIndex > 0 ? shared.queue[shared.queueIndex - 1].id : "";
+				shared.queue = shared.queue.slice(shared.queueIndex);
+				shared.queueIndex = 0;
+				return shared;
 			}
 
 			function isValidYoutubeContent(content) {
@@ -1660,7 +1825,9 @@ SOFTWARE.
 			}
 
 			function isValidYoutubeState(state) {
-				return state && isValidYoutubeContent(state.content) && isValidYoutubePlayback(state.playback) && typeof state.clockPeerId === "string" && Number.isSafeInteger(state.version?.counter) && state.version.counter >= 0 && typeof state.version?.peerId === "string" && (state.master === null || (typeof state.master?.peerId === "string" && state.master.peerId && isValidActor(state.master.actor) && typeof state.master.locked === "boolean" && (state.master.sharedControl === undefined || typeof state.master.sharedControl === "boolean")));
+				const queue = state?.queue === undefined ? [] : state.queue;
+				const queueIndex = state?.queueIndex === undefined ? 0 : state.queueIndex;
+				return state && isValidYoutubeContent(state.content) && isValidYoutubePlayback(state.playback) && Array.isArray(queue) && queue.length <= YOUTUBE_QUEUE_MAX_ENTRIES && queue.every(isValidYoutubeEntry) && Number.isSafeInteger(queueIndex) && queueIndex >= 0 && queueIndex <= queue.length && (state.queueCursorId === undefined || state.queueCursorId === "" || YOUTUBE_ENTRY_ID_PATTERN.test(state.queueCursorId)) && typeof state.clockPeerId === "string" && Number.isSafeInteger(state.version?.counter) && state.version.counter >= 0 && typeof state.version?.peerId === "string" && (state.master === null || (typeof state.master?.peerId === "string" && state.master.peerId && isValidActor(state.master.actor) && typeof state.master.locked === "boolean" && (state.master.sharedControl === undefined || typeof state.master.sharedControl === "boolean") && (state.master.allowAdding === undefined || typeof state.master.allowAdding === "boolean")));
 			}
 
 			function isNewerVersion(candidate, current) {
@@ -1685,7 +1852,7 @@ SOFTWARE.
 				} else return null;
 				const playlistId = url.searchParams.get("list") || "";
 				const requestedIndex = Number.parseInt(url.searchParams.get("index") || "1", 10);
-				const index = Number.isSafeInteger(requestedIndex) && requestedIndex > 0 ? requestedIndex - 1 : 0;
+				const index = Number.isSafeInteger(requestedIndex) && requestedIndex > 0 && requestedIndex <= 10001 ? requestedIndex - 1 : 0;
 				if (playlistId) {
 					if (!YOUTUBE_PLAYLIST_ID_PATTERN.test(playlistId)) return null;
 					return {kind: "playlist", videoId: YOUTUBE_VIDEO_ID_PATTERN.test(videoId) ? videoId : "", playlistId, index};
@@ -1724,6 +1891,177 @@ SOFTWARE.
 				});
 			}
 
+			function readYoutubePersonalPlaylist() {
+				try {
+					const candidate = JSON.parse(localStorage.getItem(YOUTUBE_PERSONAL_PLAYLIST_KEY) || "null");
+					if (candidate?.version !== YOUTUBE_PERSONAL_PLAYLIST_VERSION || !Array.isArray(candidate.entries)) return;
+					youtubePersonalPlaylist = candidate.entries.slice(0, YOUTUBE_PERSONAL_MAX_ENTRIES).filter(isValidYoutubeEntry).map(entry => cloneYoutubeEntry(entry));
+				} catch {
+					youtubePersonalPlaylist = [];
+				}
+			}
+
+			function saveYoutubePersonalPlaylist(entries) {
+				try {
+					localStorage.setItem(YOUTUBE_PERSONAL_PLAYLIST_KEY, JSON.stringify({version: YOUTUBE_PERSONAL_PLAYLIST_VERSION, entries}));
+					youtubePersonalPlaylist = entries;
+					renderYoutubeLibrary();
+					renderYoutubeControls();
+					return true;
+				} catch {
+					setNotice("Personal playlist could not be saved.", true);
+					return false;
+				}
+			}
+
+			function addYoutubePersonalEntry(entry) {
+				if (youtubePersonalPlaylist.length >= YOUTUBE_PERSONAL_MAX_ENTRIES) return setNotice("Personal playlist limit reached.", true);
+				if (saveYoutubePersonalPlaylist([...youtubePersonalPlaylist, cloneYoutubeEntry(entry, true)])) setNotice("Saved to personal playlist.");
+			}
+
+			function moveYoutubePersonalEntry(index, offset) {
+				const target = index + offset;
+				if (target < 0 || target >= youtubePersonalPlaylist.length) return;
+				const entries = youtubePersonalPlaylist.map(entry => cloneYoutubeEntry(entry));
+				[entries[index], entries[target]] = [entries[target], entries[index]];
+				saveYoutubePersonalPlaylist(entries);
+			}
+
+			function removeYoutubePersonalEntry(index) {
+				saveYoutubePersonalPlaylist(youtubePersonalPlaylist.filter((entry, candidate) => candidate !== index).map(entry => cloneYoutubeEntry(entry)));
+			}
+
+			function createYoutubeActionButton(label, action, disabled = false, title = "") {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = label;
+				button.className = "youtube-dialog-button";
+				button.disabled = disabled;
+				button.title = title;
+				button.addEventListener("click", action);
+				return button;
+			}
+
+			function youtubeEntryLabel(entry) {
+				return entry.title || (entry.content.kind === "playlist" ? "YouTube playlist" : "YouTube video");
+			}
+
+			function createYoutubeEntryCard(entry, source, index, compact = false) {
+				const card = document.createElement("article");
+				card.className = "youtube-entry-card" + (compact ? " compact" : "");
+				let thumbnail;
+				if (entry.thumbnailUrl) {
+					thumbnail = document.createElement("img");
+					thumbnail.src = entry.thumbnailUrl;
+					thumbnail.alt = "";
+					thumbnail.loading = "lazy";
+				} else {
+					thumbnail = document.createElement("span");
+					thumbnail.textContent = entry.content.kind === "playlist" ? "Playlist" : "Video";
+					thumbnail.style.display = "grid";
+					thumbnail.style.placeItems = "center";
+					thumbnail.style.color = colors.muted;
+					thumbnail.style.fontSize = ".7rem";
+				}
+				thumbnail.className = "youtube-entry-thumbnail";
+
+				const details = document.createElement("div");
+				details.className = "youtube-entry-details";
+				const title = document.createElement("strong");
+				title.className = "youtube-entry-title";
+				title.textContent = youtubeEntryLabel(entry);
+				const metadata = document.createElement("span");
+				metadata.className = "youtube-entry-meta";
+				const type = entry.content.kind === "playlist" ? "Playlist" : "Video";
+				const queueStatus = source !== "queue" ? "" : index === youtubeState.queueIndex - 1 && youtubeContentKey(entry.content) === youtubeContentKey(youtubeState.content) ? "Now playing" : index < youtubeState.queueIndex ? "Played" : "Up next";
+				metadata.textContent = [queueStatus, type, entry.channelTitle, entry.publishedAt ? new Date(entry.publishedAt).toLocaleDateString() : ""].filter(Boolean).join(" · ") || type;
+				details.append(title, metadata);
+				if (!entry.title) {
+					const id = document.createElement("span");
+					id.className = "youtube-entry-meta";
+					id.textContent = entry.content.kind === "playlist" ? entry.content.playlistId : entry.content.videoId;
+					details.appendChild(id);
+				}
+				if (!compact && entry.description) {
+					const description = document.createElement("span");
+					description.className = "youtube-entry-description";
+					description.textContent = entry.description;
+					details.appendChild(description);
+				}
+
+				const actions = document.createElement("div");
+				actions.className = "youtube-entry-actions";
+				if (source === "search") {
+					actions.append(
+						createYoutubeActionButton("Play now", () => { closeYoutubeSearch(); loadYoutubeContent(entry.content); }),
+						createYoutubeActionButton("Add to queue", () => requestYoutubeQueueMutation({type: "add", entry: cloneYoutubeEntry(entry, true)}), !canAddYoutubeQueue()),
+						createYoutubeActionButton("Save personal", () => addYoutubePersonalEntry(entry))
+					);
+				} else if (source === "queue") {
+					if (compact) actions.appendChild(createYoutubeActionButton("→ Personal", () => addYoutubePersonalEntry(entry)));
+					else actions.append(
+						createYoutubeActionButton("Play now", () => requestYoutubeQueueMutation({type: "play", id: entry.id}), !canEditYoutubeQueue()),
+						createYoutubeActionButton("Copy personal", () => addYoutubePersonalEntry(entry)),
+						createYoutubeActionButton("↑", () => requestYoutubeQueueMutation({type: "move", id: entry.id, offset: -1}), !canEditYoutubeQueue() || index <= youtubeState.queueIndex, "Move up"),
+						createYoutubeActionButton("↓", () => requestYoutubeQueueMutation({type: "move", id: entry.id, offset: 1}), !canEditYoutubeQueue() || index < youtubeState.queueIndex || index === youtubeState.queue.length - 1, "Move down"),
+						createYoutubeActionButton("Remove", () => requestYoutubeQueueMutation({type: "remove", id: entry.id}), !canEditYoutubeQueue())
+					);
+				} else if (compact) actions.appendChild(createYoutubeActionButton("→ Queue", () => requestYoutubeQueueMutation({type: "add", entry: cloneYoutubeEntry(entry, true)}), !canAddYoutubeQueue()));
+				else actions.append(
+					createYoutubeActionButton("Play now", () => loadYoutubeContent(entry.content)),
+					createYoutubeActionButton("Add to queue", () => requestYoutubeQueueMutation({type: "add", entry: cloneYoutubeEntry(entry, true)}), !canAddYoutubeQueue()),
+					createYoutubeActionButton("↑", () => moveYoutubePersonalEntry(index, -1), index === 0, "Move up"),
+					createYoutubeActionButton("↓", () => moveYoutubePersonalEntry(index, 1), index === youtubePersonalPlaylist.length - 1, "Move down"),
+					createYoutubeActionButton("Remove", () => removeYoutubePersonalEntry(index))
+				);
+				if (compact) card.append(thumbnail, details, actions);
+				else {
+					details.appendChild(actions);
+					card.append(thumbnail, details);
+				}
+				return card;
+			}
+
+			function renderYoutubeList(target, entries, source, compact) {
+				target.replaceChildren();
+				if (!entries.length) {
+					const empty = document.createElement("small");
+					empty.textContent = source === "queue" ? "Queue is empty." : "Personal playlist is empty.";
+					empty.style.color = colors.muted;
+					return target.appendChild(empty);
+				}
+				entries.forEach((entry, index) => target.appendChild(createYoutubeEntryCard(entry, source, index, compact)));
+			}
+
+			function renderYoutubeLibrary() {
+				const queueActive = youtubeLibraryTab === "queue";
+				youtubeQueueTab.textContent = "Room Queue · " + youtubeState.queue.length;
+				youtubePersonalTab.textContent = "Personal Playlist · " + youtubePersonalPlaylist.length;
+				youtubeQueueTab.classList.toggle("primary", queueActive);
+				youtubePersonalTab.classList.toggle("primary", !queueActive);
+				youtubeQueueTab.setAttribute("aria-selected", String(queueActive));
+				youtubePersonalTab.setAttribute("aria-selected", String(!queueActive));
+				youtubeLibraryGrid.classList.toggle("personal", !queueActive);
+				youtubeQueueColumn.classList.toggle("compact", !queueActive);
+				youtubePersonalColumn.classList.toggle("compact", queueActive);
+				youtubeQueueHeading.textContent = "Room Queue · " + youtubeState.queueIndex + " played · " + (youtubeState.queue.length - youtubeState.queueIndex) + " upcoming";
+				youtubePersonalHeading.textContent = "Personal Playlist";
+				renderYoutubeList(youtubeQueueList, youtubeState.queue, "queue", !queueActive);
+				renderYoutubeList(youtubePersonalList, youtubePersonalPlaylist, "personal", queueActive);
+			}
+
+			function showYoutubeDialog(mode) {
+				const search = mode === "search";
+				youtubeSearchTitle.textContent = search ? "Search YouTube" : "YouTube Lists";
+				youtubeSearchView.hidden = !search;
+				youtubeSearchView.style.display = search ? "grid" : "none";
+				youtubeLibraryView.hidden = search;
+				youtubeLibraryView.style.display = search ? "none" : "grid";
+				youtubeSearchOverlay.hidden = false;
+				youtubeSearchOverlay.style.display = "flex";
+				if (!search) renderYoutubeLibrary();
+			}
+
 			function closeYoutubeSearch() {
 				youtubeSearchController?.abort();
 				youtubeSearchController = null;
@@ -1734,60 +2072,42 @@ SOFTWARE.
 			}
 
 			function openYoutubeSearch(query) {
-				youtubeSearchOverlay.hidden = false;
-				youtubeSearchOverlay.style.display = "flex";
+				showYoutubeDialog("search");
 				youtubeSearchInput.value = query;
 				youtubeSearchInput.focus();
 				searchYoutube(query);
 			}
 
+			function openYoutubeUrl(content) {
+				showYoutubeDialog("search");
+				youtubeSearchEntries = [createYoutubeEntry(content)];
+				youtubeSearchResults.replaceChildren(createYoutubeEntryCard(youtubeSearchEntries[0], "search", 0));
+				setYoutubeSearchStatus("URL ready. No metadata request was made.");
+			}
+
+			function openYoutubeLibrary(tab = "queue") {
+				youtubeLibraryTab = tab;
+				showYoutubeDialog("library");
+			}
+
 			function renderYoutubeSearchResults(items) {
 				youtubeSearchResults.replaceChildren();
+				youtubeSearchEntries = [];
 				let resultCount = 0;
 				for (const item of items) {
 					const videoId = item.id?.videoId || "";
-					if (!YOUTUBE_VIDEO_ID_PATTERN.test(videoId)) continue;
-					const result = document.createElement("button");
-					result.type = "button";
-					result.style.display = "grid";
-					result.style.gridTemplateColumns = "minmax(7.5rem, 10rem) minmax(0, 1fr)";
-					result.style.gap = ".65rem";
-					result.style.width = "100%";
-					result.style.padding = ".45rem";
-					result.style.border = "1px solid " + colors.line;
-					result.style.borderRadius = ".55rem";
-					result.style.color = colors.text;
-					result.style.background = colors.backgroundSoft;
-					result.style.textAlign = "left";
-					result.style.cursor = "pointer";
-
-					const thumbnail = document.createElement("img");
-					thumbnail.src = item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "";
-					thumbnail.alt = "";
-					thumbnail.loading = "lazy";
-					thumbnail.style.width = "100%";
-					thumbnail.style.aspectRatio = "16 / 9";
-					thumbnail.style.objectFit = "cover";
-					thumbnail.style.borderRadius = ".4rem";
-
-					const details = document.createElement("span");
-					details.style.display = "grid";
-					details.style.alignContent = "center";
-					details.style.gap = ".3rem";
-					details.style.minWidth = "0";
-					const title = document.createElement("strong");
-					title.textContent = decodeYoutubeText(item.snippet?.title || "Untitled video");
-					title.style.lineHeight = "1.25";
-					const channel = document.createElement("small");
-					channel.textContent = decodeYoutubeText(item.snippet?.channelTitle || "Unknown channel");
-					channel.style.color = colors.muted;
-					details.append(title, channel);
-					result.append(thumbnail, details);
-					result.addEventListener("click", () => {
-						closeYoutubeSearch();
-						loadYoutubeContent({kind: "video", videoId, playlistId: "", index: 0});
+					const playlistId = item.id?.playlistId || "";
+					const content = YOUTUBE_VIDEO_ID_PATTERN.test(videoId) ? {kind: "video", videoId, playlistId: "", index: 0} : YOUTUBE_PLAYLIST_ID_PATTERN.test(playlistId) ? {kind: "playlist", videoId: "", playlistId, index: 0} : null;
+					if (!content) continue;
+					const entry = createYoutubeEntry(content, {
+						title: decodeYoutubeText(item.snippet?.title || ""),
+						channelTitle: decodeYoutubeText(item.snippet?.channelTitle || ""),
+						thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
+						publishedAt: item.snippet?.publishedAt || item.snippet?.publishTime || "",
+						description: decodeYoutubeText(item.snippet?.description || "")
 					});
-					youtubeSearchResults.appendChild(result);
+					youtubeSearchEntries.push(entry);
+					youtubeSearchResults.appendChild(createYoutubeEntryCard(entry, "search", resultCount));
 					resultCount++;
 				}
 				return resultCount;
@@ -1796,19 +2116,20 @@ SOFTWARE.
 			async function searchYoutube(query) {
 				const normalizedQuery = query.trim();
 				if (!normalizedQuery) return setYoutubeSearchStatus("Enter a search term.", true);
-				if (youtubeSearchController && normalizedQuery === youtubeSearchQuery) return;
+				const searchKey = youtubeSearchType.value + ":" + normalizedQuery;
+				if (youtubeSearchController && searchKey === youtubeSearchQuery) return;
 				youtubeSearchController?.abort();
 				const controller = new AbortController();
 				youtubeSearchController = controller;
-				youtubeSearchQuery = normalizedQuery;
+				youtubeSearchQuery = searchKey;
 				youtubeSearchButton.disabled = true;
 				setYoutubeSearchStatus("Searching…");
 				try {
 					const key = await getYoutubeSearchApiKey();
 					const url = new URL(YOUTUBE_SEARCH_API_URL);
 					url.searchParams.set("part", "snippet");
-					url.searchParams.set("type", "video");
-					url.searchParams.set("videoEmbeddable", "true");
+					url.searchParams.set("type", youtubeSearchType.value);
+					if (youtubeSearchType.value === "video") url.searchParams.set("videoEmbeddable", "true");
 					url.searchParams.set("maxResults", String(YOUTUBE_SEARCH_MAX_RESULTS));
 					url.searchParams.set("q", normalizedQuery);
 					url.searchParams.set("key", key);
@@ -1830,7 +2151,7 @@ SOFTWARE.
 					}
 					const items = Array.isArray(data?.items) ? data.items : [];
 					const resultCount = renderYoutubeSearchResults(items);
-					setYoutubeSearchStatus(resultCount ? resultCount + " result" + (resultCount === 1 ? "" : "s") + "." : "No videos found.");
+					setYoutubeSearchStatus(resultCount ? resultCount + " result" + (resultCount === 1 ? "" : "s") + "." : "No " + youtubeSearchType.value + "s found.");
 				} catch (error) {
 					if (error?.name !== "AbortError") setYoutubeSearchStatus(error instanceof Error ? error.message : "YouTube search failed.", true);
 				} finally {
@@ -1861,6 +2182,79 @@ SOFTWARE.
 				if (!isValidActor(actor) || !peerId) return false;
 				const participant = [...participants.values()].find(candidate => candidate.peerId === peerId);
 				return !participant || participant.userId === actor.userId;
+			}
+
+			function canEditYoutubeQueue() {
+				return roomReady && youtubeSynced && (!youtubeState.master || isYoutubeMaster() || youtubeState.master.sharedControl);
+			}
+
+			function canAddYoutubeQueue() {
+				return roomReady && (canEditYoutubeQueue() || Boolean(youtubeState.master?.allowAdding));
+			}
+
+			function youtubeQueueAuthorityPeerId() {
+				return youtubeState.master?.peerId || youtubeState.clockPeerId || selfId;
+			}
+
+			function isValidYoutubeQueueMutation(mutation) {
+				if (!mutation || typeof mutation.type !== "string") return false;
+				if (mutation.type === "add") return isValidYoutubeEntry(mutation.entry);
+				if (mutation.type === "move") return YOUTUBE_ENTRY_ID_PATTERN.test(mutation.id || "") && (mutation.offset === -1 || mutation.offset === 1);
+				if (mutation.type === "remove" || mutation.type === "play") return YOUTUBE_ENTRY_ID_PATTERN.test(mutation.id || "");
+				return mutation.type === "advance" && typeof mutation.expectedContentKey === "string" && mutation.expectedContentKey.length <= 300;
+			}
+
+			function applyYoutubeQueueMutation(mutation) {
+				if (!isValidYoutubeQueueMutation(mutation)) return false;
+				const queue = youtubeState.queue.map(entry => cloneYoutubeEntry(entry));
+				let queueIndex = youtubeState.queueIndex;
+				let content = cloneYoutubeContent(youtubeState.content);
+				let playback = currentSharedYoutubePlayback();
+				if (mutation.type === "add") {
+					if (queue.length >= YOUTUBE_QUEUE_MAX_ENTRIES) {
+						const currentQueueEntry = queueIndex > 0 && youtubeContentKey(queue[queueIndex - 1].content) === youtubeContentKey(youtubeState.content);
+						if (queueIndex === 0 || (queueIndex === 1 && currentQueueEntry)) return false;
+						queue.shift();
+						queueIndex--;
+					}
+					queue.push(cloneYoutubeEntry(mutation.entry));
+				} else if (mutation.type === "advance") {
+					if (queueIndex >= queue.length || mutation.expectedContentKey !== youtubeContentKey(youtubeState.content)) return false;
+					content = cloneYoutubeContent(queue[queueIndex++].content);
+					playback = {status: "playing", position: 0, rate: 1};
+				} else {
+					const index = queue.findIndex(entry => entry.id === mutation.id);
+					if (index < 0) return false;
+					if (mutation.type === "remove") {
+						queue.splice(index, 1);
+						if (index < queueIndex) queueIndex--;
+					}
+					else if (mutation.type === "play") {
+						content = cloneYoutubeContent(queue[index].content);
+						queueIndex = index + 1;
+						playback = {status: "playing", position: 0, rate: 1};
+					} else {
+						const target = index + mutation.offset;
+						if (index < queueIndex || target < queueIndex || target >= queue.length) return false;
+						[queue[index], queue[target]] = [queue[target], queue[index]];
+					}
+				}
+				const changesPlayback = mutation.type === "play" || mutation.type === "advance";
+				if (changesPlayback && youtubeSynced) applyYoutubeSnapshot(content, playback);
+				publishYoutubeState(content, playback, youtubeState.master, queue, queueIndex, changesPlayback && youtubeSynced);
+				return true;
+			}
+
+			function requestYoutubeQueueMutation(mutation) {
+				if (!isValidYoutubeQueueMutation(mutation)) return;
+				const allowed = mutation.type === "add" ? canAddYoutubeQueue() : mutation.type === "advance" ? youtubeSynced : canEditYoutubeQueue();
+				if (!allowed) return setNotice("Room queue action is not allowed.", true);
+				const authority = youtubeQueueAuthorityPeerId();
+				if (authority === selfId) {
+					if (!applyYoutubeQueueMutation(mutation)) setNotice(mutation.type === "add" ? "Room queue limit reached." : "Room queue action failed.", true);
+					return;
+				}
+				connection?.sendYouTube({kind: "queueMutation", actor: currentActor(), mutation}, [authority]).catch(error => setNotice("Room queue request failed: " + (error instanceof Error ? error.message : String(error)), true));
 			}
 
 			function submitYoutubeSnapshot(snapshot) {
@@ -2053,6 +2447,9 @@ SOFTWARE.
 				youtubeControlButton.title = master?.locked && !selfMaster ? "The controller locked takeover." : selfMaster ? "Return the room to shared control." : "Use the local playback and take control.";
 				youtubeSharedControlButton.hidden = !selfMaster;
 				youtubeSharedControlButton.textContent = master?.sharedControl ? "Stop shared control" : "Allow shared control";
+				youtubeAllowAddingButton.hidden = !selfMaster;
+				youtubeAllowAddingButton.textContent = master?.allowAdding ? "Stop adding" : "Allow adding";
+				youtubeAllowAddingButton.setAttribute("aria-pressed", String(Boolean(master?.allowAdding)));
 				youtubeLockButton.hidden = !selfMaster;
 				youtubeLockButton.textContent = master?.locked ? "🔒" : "🔓";
 				youtubeLockButton.ariaLabel = master?.locked ? "Unlock takeover" : "Lock takeover";
@@ -2060,6 +2457,11 @@ SOFTWARE.
 				youtubeLockButton.setAttribute("aria-pressed", String(Boolean(master?.locked)));
 				youtubeInput.disabled = !roomReady;
 				youtubeLoadButton.disabled = !roomReady;
+				youtubeListsButton.disabled = !roomReady;
+				youtubeListsButton.textContent = "Lists · " + youtubeState.queue.length;
+				youtubeListsButton.title = youtubeState.queue.length + " queued, " + youtubePersonalPlaylist.length + " saved personally.";
+				if (!youtubeSearchOverlay.hidden && youtubeLibraryView.style.display !== "none") renderYoutubeLibrary();
+				else if (!youtubeSearchOverlay.hidden && youtubeSearchEntries.length) youtubeSearchResults.replaceChildren(...youtubeSearchEntries.map((entry, index) => createYoutubeEntryCard(entry, "search", index)));
 				if (youtubePlayerError) {
 					youtubeStatus.textContent = (youtubeSynced ? "Synced" : "Local playback") + " · " + youtubePlayerError;
 					youtubeStatus.style.color = colors.warning;
@@ -2078,6 +2480,9 @@ SOFTWARE.
 				} else if (master.sharedControl) {
 					youtubeStatus.textContent = "Synced · Shared control is allowed by the controller.";
 					youtubeStatus.style.color = colors.success;
+				} else if (master.allowAdding) {
+					youtubeStatus.textContent = "Synced · Following the room controller. Queue adding is allowed.";
+					youtubeStatus.style.color = colors.success;
 				} else {
 					youtubeStatus.textContent = "Synced · Following the room controller.";
 					youtubeStatus.style.color = colors.success;
@@ -2085,23 +2490,27 @@ SOFTWARE.
 			}
 
 			function sendYoutubeState(state) {
-				connection?.sendYouTube({kind: "state", state: cloneYoutubeState(state)}).catch(error => setNotice("YouTube state send failed: " + (error instanceof Error ? error.message : String(error)), true));
+				connection?.sendYouTube({kind: "state", state: cloneYoutubeSharedState(state)}).catch(error => setNotice("YouTube state send failed: " + (error instanceof Error ? error.message : String(error)), true));
 			}
 
-			function publishYoutubeState(content, playback, master) {
+			function publishYoutubeState(content, playback, master, queue = youtubeState.queue, queueIndex = youtubeState.queueIndex, updateLocalPlayback = true) {
 				if (!roomReady || !connection) return;
 				youtubeState = {
 					content: cloneYoutubeContent(content),
 					playback: cloneYoutubePlayback(playback),
-					master: master ? {peerId: master.peerId, actor: {...master.actor}, locked: master.locked, sharedControl: Boolean(master.sharedControl)} : null,
+					queue: queue.map(entry => cloneYoutubeEntry(entry)),
+					queueIndex,
+					master: master ? {peerId: master.peerId, actor: {...master.actor}, locked: master.locked, sharedControl: Boolean(master.sharedControl), allowAdding: Boolean(master.allowAdding)} : null,
 					clockPeerId: selfId,
 					version: {counter: youtubeState.version.counter + 1, peerId: selfId}
 				};
 				youtubeStateReceivedAt = performance.now();
-				youtubeSynced = true;
-				youtubePlayerError = "";
-				localYoutubeContent = cloneYoutubeContent(content);
-				localYoutubePlayback = cloneYoutubePlayback(playback);
+				if (updateLocalPlayback) {
+					youtubeSynced = true;
+					youtubePlayerError = "";
+					localYoutubeContent = cloneYoutubeContent(content);
+					localYoutubePlayback = cloneYoutubePlayback(playback);
+				}
 				sendYoutubeState(youtubeState);
 				renderYoutubeControls();
 			}
@@ -2112,7 +2521,9 @@ SOFTWARE.
 				youtubeState = {
 					content: cloneYoutubeContent(snapshot.content),
 					playback: cloneYoutubePlayback(snapshot.playback),
-					master: {peerId: target.peerId, actor: {userId: target.userId, name: target.name, mode: target.mode}, locked: youtubeState.master.locked, sharedControl: youtubeState.master.sharedControl},
+					queue: youtubeState.queue.map(entry => cloneYoutubeEntry(entry)),
+					queueIndex: youtubeState.queueIndex,
+					master: {peerId: target.peerId, actor: {userId: target.userId, name: target.name, mode: target.mode}, locked: youtubeState.master.locked, sharedControl: youtubeState.master.sharedControl, allowAdding: youtubeState.master.allowAdding},
 					clockPeerId: target.peerId,
 					version: {counter: youtubeState.version.counter + 1, peerId: selfId}
 				};
@@ -2132,7 +2543,14 @@ SOFTWARE.
 				if (!fromSnapshot && !youtubeState.master && candidate.master && senderPeerId !== candidate.master.peerId) return;
 				if (!fromSnapshot && !youtubeState.master && !candidate.master && senderPeerId !== candidate.version.peerId) return;
 				const wasMaster = isYoutubeMaster();
-				youtubeState = cloneYoutubeState(candidate);
+				const incoming = cloneYoutubeState(candidate);
+				const cursorId = candidate.queueCursorId || (incoming.queueIndex > 0 ? incoming.queue[incoming.queueIndex - 1].id : "");
+				const incomingQueue = incoming.queue.slice(incoming.queueIndex);
+				let history = youtubeState.queue.slice(0, youtubeState.queueIndex);
+				const cursorIndex = cursorId ? youtubeState.queue.findIndex((entry, index) => index >= youtubeState.queueIndex && entry.id === cursorId) : -1;
+				if (cursorIndex >= 0) history.push(...youtubeState.queue.slice(youtubeState.queueIndex, cursorIndex + 1));
+				history = history.slice(Math.max(0, history.length - (YOUTUBE_QUEUE_MAX_ENTRIES - incomingQueue.length)));
+				youtubeState = {...incoming, queue: [...history, ...incomingQueue], queueIndex: history.length};
 				youtubeStateReceivedAt = performance.now();
 				youtubePlayerError = "";
 				if (youtubeState.master?.peerId === selfId || (wasMaster && youtubeState.master?.peerId !== selfId)) youtubeSynced = true;
@@ -2148,6 +2566,18 @@ SOFTWARE.
 					youtubeState.playback = cloneYoutubePlayback(message.playback);
 					youtubeStateReceivedAt = performance.now();
 					if (youtubeSynced) synchronizeYoutubePlayback(youtubeState.playback);
+					return;
+				}
+				if (message.kind === "queueDenied") {
+					if (senderPeerId === youtubeQueueAuthorityPeerId()) setNotice("The room queue action was rejected.", true);
+					return;
+				}
+				if (message.kind === "queueMutation") {
+					if (youtubeQueueAuthorityPeerId() !== selfId || !isYoutubeActorFromPeer(message.actor, senderPeerId) || !isValidYoutubeQueueMutation(message.mutation)) return;
+					const mutation = message.mutation;
+					const allowed = !isIgnored(message.actor, "youtubeControl") && (mutation.type === "advance" || !youtubeState.master || youtubeState.master.sharedControl || (mutation.type === "add" && youtubeState.master.allowAdding));
+					if (allowed && applyYoutubeQueueMutation(mutation)) return;
+					connection?.sendYouTube({kind: "queueDenied"}, [senderPeerId]).catch(error => setNotice("Room queue response failed: " + (error instanceof Error ? error.message : String(error)), true));
 					return;
 				}
 				if (message.kind === "controlDenied") {
@@ -2179,7 +2609,9 @@ SOFTWARE.
 				youtubeState = {
 					content: cloneYoutubeContent(message.content),
 					playback: cloneYoutubePlayback(message.playback),
-					master: {peerId: senderPeerId, actor: {...message.actor}, locked: false, sharedControl: false},
+					queue: youtubeState.queue.map(entry => cloneYoutubeEntry(entry)),
+					queueIndex: youtubeState.queueIndex,
+					master: {peerId: senderPeerId, actor: {...message.actor}, locked: false, sharedControl: false, allowAdding: false},
 					clockPeerId: senderPeerId,
 					version: {counter: youtubeState.version.counter + 1, peerId: selfId}
 				};
@@ -2196,6 +2628,15 @@ SOFTWARE.
 				localYoutubePlayback.status = status;
 				if (status === "ended" && localYoutubeContent?.kind === "playlist") youtubeNaturalAdvanceUntil = performance.now() + 3000;
 				if (performance.now() < youtubeRemoteGuardUntil) return;
+				if (status === "ended" && youtubeSynced && youtubeState.queueIndex < youtubeState.queue.length) {
+					const playlist = localYoutubeContent?.kind === "playlist" ? youtubePlayer.getPlaylist?.() : null;
+					const playlistIndex = localYoutubeContent?.kind === "playlist" ? youtubePlayer.getPlaylistIndex?.() : -1;
+					const contentFinished = localYoutubeContent?.kind === "video" || (Array.isArray(playlist) && playlist.length > 0 && playlistIndex === playlist.length - 1);
+					if (contentFinished) {
+						requestYoutubeQueueMutation({type: "advance", expectedContentKey: youtubeContentKey(youtubeState.content)});
+						return;
+					}
+				}
 				const snapshot = readLocalYoutubeSnapshot();
 				if (!submitYoutubeSnapshot(snapshot) && youtubeSynced && youtubeState.master && status !== youtubeState.playback.status && status !== "ended") {
 					youtubeSynced = false;
@@ -2243,6 +2684,8 @@ SOFTWARE.
 				youtubeState = {
 					content: cloneYoutubeContent(youtubeState.content),
 					playback: currentSharedYoutubePlayback(),
+					queue: youtubeState.queue.map(entry => cloneYoutubeEntry(entry)),
+					queueIndex: youtubeState.queueIndex,
 					master: youtubeState.master?.peerId === peerId ? null : youtubeState.master,
 					clockPeerId: successor,
 					version: {counter: youtubeState.version.counter + 1, peerId: successor}
@@ -2429,7 +2872,7 @@ SOFTWARE.
 				const generation = connectionGeneration;
 				try {
 					connection = createRoomConnection(currentRoomId, {
-						getState: () => ({pad: clonePadState(padState), stream: cloneStreamState(streamState), youtube: cloneYoutubeState(youtubeState)}),
+						getState: () => ({pad: clonePadState(padState), stream: cloneStreamState(streamState), youtube: cloneYoutubeSharedState(youtubeState)}),
 						onRelayStatus: ready => {
 							if (generation !== connectionGeneration) return;
 							relayConnected = ready;
@@ -2548,11 +2991,14 @@ SOFTWARE.
 				if (!value) return setNotice("Enter a YouTube URL or search term.", true);
 				const content = parseYoutubeUrl(value);
 				if (!content) return openYoutubeSearch(value);
-				loadYoutubeContent(content);
+				openYoutubeUrl(content);
 				youtubeInput.value = "";
 			});
 
 			youtubeSearchCloseButton.addEventListener("click", closeYoutubeSearch);
+			youtubeListsButton.addEventListener("click", () => openYoutubeLibrary("queue"));
+			youtubeQueueTab.addEventListener("click", () => { youtubeLibraryTab = "queue"; renderYoutubeLibrary(); });
+			youtubePersonalTab.addEventListener("click", () => { youtubeLibraryTab = "personal"; renderYoutubeLibrary(); });
 			youtubeSearchForm.addEventListener("submit", event => {
 				event.preventDefault();
 				searchYoutube(youtubeSearchInput.value);
@@ -2586,7 +3032,7 @@ SOFTWARE.
 				}
 				if (youtubeState.master?.locked) return;
 				if (!youtubeState.master) {
-					publishYoutubeState(snapshot.content, snapshot.playback, {peerId: selfId, actor: currentActor(), locked: false, sharedControl: false});
+					publishYoutubeState(snapshot.content, snapshot.playback, {peerId: selfId, actor: currentActor(), locked: false, sharedControl: false, allowAdding: false});
 					return;
 				}
 				connection?.sendYouTube({kind: "takeover", actor: currentActor(), content: snapshot.content, playback: snapshot.playback}, [youtubeState.master.peerId]).then(() => setNotice("Control requested.")).catch(error => setNotice("Control request failed: " + (error instanceof Error ? error.message : String(error)), true));
@@ -2596,6 +3042,12 @@ SOFTWARE.
 				if (!isYoutubeMaster()) return;
 				const snapshot = readLocalYoutubeSnapshot();
 				publishYoutubeState(snapshot.content, snapshot.playback, {...youtubeState.master, sharedControl: !youtubeState.master.sharedControl});
+			});
+
+			youtubeAllowAddingButton.addEventListener("click", () => {
+				if (!isYoutubeMaster()) return;
+				const snapshot = readLocalYoutubeSnapshot();
+				publishYoutubeState(snapshot.content, snapshot.playback, {...youtubeState.master, allowAdding: !youtubeState.master.allowAdding});
 			});
 
 			youtubeLockButton.addEventListener("click", () => {
@@ -2791,6 +3243,7 @@ SOFTWARE.
 
 			readChatProfile();
 			readCommunityAccess();
+			readYoutubePersonalPlaylist();
 			try { userRules = JSON.parse(localStorage.getItem(USER_RULES_KEY) || "{}") || {}; } catch { userRules = {}; }
 			renderChatIdentity();
 			render();
