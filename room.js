@@ -62,7 +62,8 @@ export function createRoomConnection(roomId, handlers) {
 	let padAction;
 	let streamAction;
 	let stateRequestAction;
-	let navigateAction;
+	let invitationAction;
+	let invitePolicyAction;
 	let chatAction;
 	let activityAction;
 	let profileAction;
@@ -145,7 +146,8 @@ export function createRoomConnection(roomId, handlers) {
 			kind: "request",
 			onRequest: () => handlers.getState()
 		});
-		navigateAction = room.makeAction("navigate");
+		invitationAction = room.makeAction("invitation");
+		invitePolicyAction = room.makeAction("invitePolicy");
 		chatAction = room.makeAction("chat");
 		activityAction = room.makeAction("activity");
 		profileAction = room.makeAction("profile");
@@ -163,10 +165,12 @@ export function createRoomConnection(roomId, handlers) {
 			if (generation !== roomGeneration) return;
 			reportPresence();
 			handlers.onPeerLeave?.(peerId);
+			if (!Object.keys(room.getPeers()).length) scheduleRejoin(REJOIN_DISCOVERY_DELAY_MS);
 		};
 		padAction.onMessage = (state, {peerId}) => generation === roomGeneration && handlers.onPad(state, peerId);
 		streamAction.onMessage = (state, {peerId}) => generation === roomGeneration && handlers.onStream(state, peerId);
-		navigateAction.onMessage = (payload, {peerId}) => generation === roomGeneration && handlers.onNavigate(payload, peerId);
+		invitationAction.onMessage = (payload, {peerId}) => generation === roomGeneration && handlers.onInvitation(payload, peerId);
+		invitePolicyAction.onMessage = (policy, {peerId}) => generation === roomGeneration && handlers.onInvitePolicy(policy, peerId);
 		chatAction.onMessage = (message, {peerId}) => generation === roomGeneration && handlers.onChat(message, peerId);
 		activityAction.onMessage = (activity, {peerId}) => generation === roomGeneration && handlers.onActivity(activity, peerId);
 		profileAction.onMessage = (profile, {peerId}) => generation === roomGeneration && handlers.onProfile(profile, peerId);
@@ -182,11 +186,12 @@ export function createRoomConnection(roomId, handlers) {
 	return {
 		sendPad: state => padAction.send(state),
 		sendStream: state => streamAction.send(state),
-		sendNavigate: payload => navigateAction.send(payload),
+		sendInvitation: (payload, targets) => invitationAction.send(payload, {target: targets}),
+		sendInvitePolicy: (policy, targets) => invitePolicyAction.send(policy, {target: targets}),
 		sendChat: message => chatAction.send(message),
 		sendActivity: activity => activityAction.send(activity),
 		sendProfile: profile => profileAction.send(profile),
-		sendYouTube: (message, targets) => targets ? youtubeAction.send(message, targets) : youtubeAction.send(message),
+		sendYouTube: (message, targets) => targets ? youtubeAction.send(message, {target: targets}) : youtubeAction.send(message),
 		getPeerIds: () => Object.keys(room.getPeers()),
 		leave() {
 			active = false;
