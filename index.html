@@ -4137,8 +4137,14 @@ SOFTWARE.
 							peerCount = count;
 							render();
 						},
+						onJoinError: details => {
+							if (generation !== connectionGeneration) return;
+							const peerId = typeof details?.peerId === "string" ? details.peerId.slice(0, 8) : "unknown";
+							const error = details?.error;
+							setNotice("Peer " + peerId + " could not connect: " + (error instanceof Error ? error.message : String(error || "unknown error")), true);
+						},
 						onError: error => {
-							if (generation === connectionGeneration) setNotice("Peer connection failed: " + (error instanceof Error ? error.message : String(error)), true);
+							if (generation === connectionGeneration) setNotice("Room synchronization failed: " + (error instanceof Error ? error.message : String(error)), true);
 						}
 					});
 					render();
