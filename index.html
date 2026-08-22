@@ -49,7 +49,7 @@ SOFTWARE.
 			const YOUTUBE_OEMBED_MAX_CONCURRENT = 4;
 			const YOUTUBE_MONITOR_MS = 500;
 			const YOUTUBE_HEARTBEAT_MS = 1000;
-			const YOUTUBE_DRIFT_SECONDS = 1.5;
+			const YOUTUBE_DRIFT_SECONDS = 5;
 			const YOUTUBE_LOCAL_SEEK_SECONDS = .75;
 			const YOUTUBE_REMOTE_GUARD_MS = 1500;
 			const YOUTUBE_QUEUE_MAX_ENTRIES = 200;
@@ -1735,6 +1735,7 @@ SOFTWARE.
 			let youtubeNaturalAdvanceUntil = 0;
 			let youtubeLastSample = null;
 			let youtubeLastHeartbeatAt = 0;
+			let youtubeBackgroundPausePending = false;
 			let youtubePageInactive = document.hidden || !document.hasFocus();
 			let youtubeMonitor = 0;
 			let youtubeSearchApiKeyPromise = null;
@@ -3229,7 +3230,7 @@ SOFTWARE.
 
 			function isStaleYoutubePlayback(playback) {
 				const shared = currentSharedYoutubePlayback();
-				return youtubeSynced && shared.status === "playing" && playback.status !== "playing" && playback.position + YOUTUBE_DRIFT_SECONDS < shared.position;
+				return youtubeSynced && shared.status === "playing" && playback.position + YOUTUBE_DRIFT_SECONDS < shared.position;
 			}
 
 			function youtubeStatusFromPlayer(value) {
@@ -3334,6 +3335,8 @@ SOFTWARE.
 
 			function applyYoutubeSnapshot(content, playback) {
 				const previousKey = youtubeContentKey(localYoutubeContent);
+				const nextKey = youtubeContentKey(content);
+				if (previousKey !== nextKey || playback.status !== "playing") youtubeBackgroundPausePending = false;
 				localYoutubeContent = cloneYoutubeContent(content);
 				localYoutubePlayback = cloneYoutubePlayback(playback);
 				youtubeLastSample = null;
@@ -3346,7 +3349,7 @@ SOFTWARE.
 				}
 				const playerVideoId = youtubePlayer.getVideoData?.()?.video_id || "";
 				const playerHasContent = content.kind === "video" ? playerVideoId === content.videoId : Boolean(youtubePlayer.getPlaylist?.()?.length);
-				const changed = previousKey !== youtubeContentKey(content) || !playerHasContent;
+				const changed = previousKey !== nextKey || !playerHasContent;
 				if (changed && content.kind === "playlist") {
 					const options = {list: content.playlistId, listType: "playlist", index: content.index, startSeconds: playback.position};
 					if (playback.status === "playing") youtubePlayer.loadPlaylist(options);
@@ -3594,6 +3597,7 @@ SOFTWARE.
 				if (event.data === 3 || event.data === -1 || event.data === 5) return;
 				if (status === "paused" && performance.now() < youtubeRemoteGuardUntil) return;
 				if (status === "paused" && youtubePageInactive && youtubeSynced && youtubeState.playback.status === "playing") {
+					youtubeBackgroundPausePending = true;
 					applyYoutubeSnapshot(youtubeState.content, currentSharedYoutubePlayback());
 					return;
 				}
@@ -3604,6 +3608,11 @@ SOFTWARE.
 				localYoutubePlayback.status = status;
 				if (status === "ended" && localYoutubeContent?.kind === "playlist") youtubeNaturalAdvanceUntil = performance.now() + 3000;
 				if (performance.now() < youtubeRemoteGuardUntil) return;
+				if (status === "playing" && youtubeBackgroundPausePending && youtubeSynced && youtubeState.playback.status === "playing") {
+					youtubeBackgroundPausePending = false;
+					applyYoutubeSnapshot(youtubeState.content, currentSharedYoutubePlayback());
+					return;
+				}
 				if (status === "ended" && youtubeSynced && youtubeState.queueIndex < youtubeState.queue.length) {
 					const playlist = localYoutubeContent?.kind === "playlist" ? youtubePlayer.getPlaylist?.() : null;
 					const playlistIndex = localYoutubeContent?.kind === "playlist" ? youtubePlayer.getPlaylistIndex?.() : -1;
@@ -3647,6 +3656,7 @@ SOFTWARE.
 					const contentChanged = sample.key !== youtubeContentKey(youtubeState.content);
 					transientPause = youtubeSynced && youtubeState.playback.status === "playing" && sample.status === "paused" && (youtubePageInactive || isStaleYoutubePlayback(sample));
 					if (transientPause) {
+						youtubeBackgroundPausePending = true;
 						applyYoutubeSnapshot(youtubeState.content, currentSharedYoutubePlayback());
 					} else {
 						const sharedAction = localSeek || (contentChanged && now > youtubeNaturalAdvanceUntil);
@@ -3882,6 +3892,7 @@ SOFTWARE.
 				youtubeNaturalAdvanceUntil = 0;
 				youtubeLastSample = null;
 				youtubeLastHeartbeatAt = 0;
+				youtubeBackgroundPausePending = false;
 				localYoutubeContent = null;
 				localYoutubePlayback = {status: "paused", position: 0, rate: 1};
 				if (youtubePlayerReady) applyYoutubeSnapshot(null, localYoutubePlayback);
